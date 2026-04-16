@@ -1,0 +1,76 @@
+# Entorno - Excluye archivos con credenciales y configuraciones locales
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# IDE - Excluye configuraciones personales de editores de código
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.eclipse/
+.metadata/
+.recommenders/
+
+# Sistema - Excluye archivos temporales del sistema operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.tmp
+*.temp
+
+# Logs - Excluye archivos de registro y errores
+*.log
+logs/
+error.log
+connection.log
+postgresql.log
+pg_log/
+
+# Temporales - Excluye caché y archivos temporales de aplicación
+cache/
+tmp/
+temp/
+*.cache
+*.bak
+*.backup
+*.old
+
+# PostgreSQL - Excluye archivos específicos de PostgreSQL
+*.dump
+*.sqlc
+*.psql_history
+pgadmin/
+.postgresql/
+pg_hba.conf.local
+postgresql.conf.local
+
+# Documentación generada - Excluye archivos generados automáticamente
+docs/build/
+*.html
+*.png.temp
+diagrams/generated/
+mermaid-output/
+
+# Python (si aplica) - Excluye entorno virtual y dependencias
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+ENV/
+
+# Node.js (si aplica) - Excluye dependencias y build
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
