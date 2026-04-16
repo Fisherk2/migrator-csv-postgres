@@ -1,0 +1,4 @@
+[submodule "extern/auditor"]
+	path = extern/auditor
+	url = https://github.com/Fisherk2/auditor-de-calidad-de-datos.git
+	branch = main
