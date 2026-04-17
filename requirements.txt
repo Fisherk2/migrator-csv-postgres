@@ -1,0 +1,36 @@
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Dependencias Core: Migrador CSV → PostgreSQL
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Librerías mínimas para MVP sin dependencias pesadas
+
+# Conector PostgreSQL optimizado para producción
+psycopg2-binary>=2.9.0  # Core: Conexión BD, soporte UTF-8, COPY FROM
+
+# Parser YAML para configuración declarativa
+PyYAML>=6.0.0  # Core: Carga config/default_migration.yaml
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Dependencias de Desarrollo y Testing
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+# Framework de testing minimalista y potente
+pytest>=7.0.0  # Dev: Tests unitarios e integración
+
+# Cobertura de código para CI/CD
+pytest-cov>=4.0.0  # Dev: Métricas de cobertura en pytest
+
+# Formateo de código consistente
+black>=23.0.0  # Dev: Linter y formatter PEP8
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# NOTA IMPORTANTE: Dependencias EXCLUIDAS
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# NO incluir las siguientes librerías (usamos stdlib o alternativas ligeras):
+# - pandas: Usamos csv stdlib + psycopg2 COPY FROM (más eficiente)
+# - sqlalchemy: psycopg2-binary es más ligero y directo
+# - click: Usamos argparse stdlib
+# - loguru: logging stdlib es suficiente y más portable
+# - python-dotenv: Usamos os.getenv() stdlib
+#
+# auditor-de-calidad-de-datos: Se gestiona vía Git submodule (.gitmodules)
+# NO vía pip para evitar conflictos de versionado
