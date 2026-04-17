@@ -1,0 +1,136 @@
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Configuración por Defecto: Migrador CSV → PostgreSQL
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Contrato de ejecución del pipeline según Clean Architecture
+# Este archivo define políticas, no credenciales (ver .env.example)
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUENTE DE DATOS (SOURCE)
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+source:
+  # Ruta relativa al archivo CSV (obligatorio)
+  csv_path: "data/customers.csv"
+  
+  # Encoding del archivo CSV (default: UTF-8)
+  encoding: "UTF-8"
+  
+  # Delimitador de columnas (default: comma)
+  delimiter: ","
+  
+  # Carácter de comillas (default: double_quote)
+  quote_char: '"'
+  
+  # Fila que contiene los encabezados (default: 1)
+  header_row: 1
+  
+  # Saltar filas vacías al final (default: true)
+  skip_empty_rows: true
+  
+  # Máximo de filas a procesar (default: null = sin límite)
+  max_rows: null
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# DESTINO DE DATOS (TARGET)
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+target:
+  # Tabla destino en PostgreSQL (obligatorio)
+  table_name: "customers"
+  
+  # Schema de la base de datos (default: public)
+  schema: "public"
+  
+  # Estrategia de inserción: 'copy' (rápido) o 'insert' (seguro)
+  insertion_strategy: "copy"
+  
+  # Manejo de duplicados: 'skip', 'update', 'error'
+  duplicate_handling: "skip"
+  
+  # Columnas únicas para detectar duplicados
+  unique_columns: ["email"]
+  
+  # Tamaño del lote para inserciones (default: 1000)
+  batch_size: 1000
+  
+  # Confirmar transacción cada N lotes (default: 10)
+  commit_every: 10
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# VALIDACIÓN DE DATOS
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+validation:
+  # Modo de validación: 'strict' (aborta) o 'permissive' (continúa)
+  mode: "strict"
+  
+  # Máximo de errores antes de rollback (default: 50)
+  max_errors_before_rollback: 50
+  
+  # Columnas que permiten valores nulos
+  nullable_columns: ["phone", "created_at"]
+  
+  # Reglas de formato por columna
+  format_rules:
+    # Email: validación básica + sugerencias
+    email:
+      pattern: "basic"  # basic, rfc5322
+      allow_suggestions: true
+    
+    # Teléfono: formato internacional o local
+    phone:
+      pattern: "international"  # international, local, custom
+      country_code: "+52"
+    
+    # Fechas: formato y rango válido
+    date:
+      format: "YYYY-MM-DD"
+      min_date: "1900-01-01"
+      max_date: "2030-12-31"
+  
+  # Tipos de datos esperados por columna
+  column_types:
+    id: "integer"
+    name: "string"
+    email: "email"
+    phone: "string"
+    created_at: "datetime"
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# REPORTES Y LOGGING
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+reporting:
+  # Directorio para reportes de errores (default: reports/)
+  output_dir: "reports/"
+  
+  # Formato del reporte principal: 'json', 'csv', 'both'
+  format: "both"
+  
+  # Nivel de detalle: 'summary', 'detailed', 'full'
+  detail_level: "detailed"
+  
+  # Incluir estadísticas de rendimiento
+  include_performance_stats: true
+  
+  # Umbral para logs informativos (default: 1000)
+  log_progress_every: 1000
+  
+  # Generar reporte de errores por separado
+  separate_error_report: true
+  
+  # Plantilla de nombres de archivos (timestamp incluido)
+  filename_template: "migration_{timestamp}_{table_name}"
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# CONFIGURACIÓN AVANZADA (EXPERIMENTAL)
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# TODO: Habilitar según necesidades específicas del entorno
+advanced:
+  # Paralelización de validación (default: false)
+  parallel_validation: false
+  
+  # Caché de validadores (default: true)
+  validator_cache: true
+  
+  # Retry automático en fallos de conexión
+  connection_retry:
+    enabled: true
+    max_attempts: 3
+    backoff_seconds: 5
