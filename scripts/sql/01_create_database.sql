@@ -3,7 +3,7 @@
 -- Purpose: Crear una base de datos PostgreSQL con locale y encoding UTF-8
 -- Author: fisherk2
 -- Version: 1.0
--- Date: 2026-03-13
+-- Date: 2026-04-16
 -- 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙
 
 -- ■■■■■■■■■■■■■ Establecer variables de sesión para creación consistente de base de datos ■■■■■■■■■■■■■
@@ -20,19 +20,19 @@ SET client_min_messages = warning;
 -- Nota: Usamos variables de entorno para hacerlo dinámico y seguro
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'your_database_name') THEN
-        RAISE NOTICE 'Base de datos % ya existe. Omitiendo creación.', 'your_database_name';
+    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'migrator_ecommerce') THEN
+        RAISE NOTICE 'Base de datos % ya existe. Omitiendo creación.', 'migrator_ecommerce';
     ELSE
-        RAISE NOTICE 'Creando base de datos %...', 'your_database_name';
+        RAISE NOTICE 'Creando base de datos %...', 'migrator_ecommerce';
     END IF;
 END $$;
 
 -- ■■■■■■■■■■■ Crear base de datos (solo si no existe) ■■■■■■■■■■■■■■
 -- Nota: Usamos el usuario de la variable de entorno para hacerlo dinámico
 \set ON_ERROR_STOP on
-CREATE DATABASE your_database_name
+CREATE DATABASE migrator_ecommerce
     WITH 
-    OWNER = fisherk2
+    OWNER = migrator_user
     ENCODING = 'UTF8'
     LC_COLLATE = 'en_US.UTF-8'
     LC_CTYPE = 'en_US.UTF-8'
@@ -43,11 +43,11 @@ CREATE DATABASE your_database_name
 
 -- ■■■■■■■■■■■■ Otorgar permisos básicos al usuario de la variable de entorno ■■■■■■■■■■■■
 -- Esto asegura que la base de datos sea accesible para scripts de migración subsecuentes
-GRANT ALL PRIVILEGES ON DATABASE your_database_name TO current_user;
+GRANT ALL PRIVILEGES ON DATABASE migrator_ecommerce TO current_user;
 
 -- ■■■■■■■■■■■■ Proporcionar instrucciones de uso para desarrolladores ■■■■■■■■■■■■
 -- Este comentario sirve como documentación para miembros del equipo
-COMMENT ON DATABASE your_database_name IS 'Base de datos principal de la aplicación - creada con create_database.sql';
+COMMENT ON DATABASE migrator_ecommerce IS 'Base de datos principal de la aplicación - creada con create_database.sql';
 
 -- ■■■■■■■■■■■■■ Desconectarse de la nueva base de datos para retornar al estado de conexión original ■■■■■■■■■■■■■
 -- Esto previene que scripts subsecuentes se ejecuten accidentalmente contra la base de datos incorrecta
@@ -57,7 +57,7 @@ COMMENT ON DATABASE your_database_name IS 'Base de datos principal de la aplicac
 -- Esto proporciona retroalimentación clara de que la base de datos está lista para migraciones
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'your_database_name') THEN
-        RAISE NOTICE 'Script de creación de base de datos completado. Base de datos "your_database_name" está lista para migraciones.';
+    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'migrator_ecommerce') THEN
+        RAISE NOTICE 'Script de creación de base de datos completado. Base de datos "migrator_ecommerce" está lista para migraciones.';
     END IF;
 END $$;
