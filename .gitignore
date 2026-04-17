@@ -91,7 +91,7 @@ junit.xml
 .tox/
 
 # Configuración - Secretos y archivos locales
-.env*
+#.env*
 config/*secret*.yaml
 config/*local*.yaml
 *.secret.yaml
