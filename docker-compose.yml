@@ -1,0 +1,56 @@
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Docker Compose: PostgreSQL para Desarrollo
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Contenedor efímero para testing del migrador CSV
+# Compatible con Docker Compose 3.8+
+
+version: '3.8'
+
+services:
+  # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  # SERVICIO POSTGRESQL
+  # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  postgres:
+    # Imagen ligera y estable para PostgreSQL 15
+    image: postgres:15-alpine
+    
+    # Nombre del contenedor para debugging
+    container_name: migrator_postgres_dev
+    
+    # Variables de entorno desde archivo .env (con fallbacks seguros)
+    environment:
+      POSTGRES_DB: ${DB_NAME:-migrator_ecommerce}
+      POSTGRES_USER: ${DB_USER:-migrator_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password_123}
+      # Encoding UTF-8 para compatibilidad con CSV
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    
+    # Puerto mapeado a localhost
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    
+    # Volumen nombrado para persistencia controlada de datos de prueba
+    volumes:
+      - pgdata_migrator:/var/lib/postgresql/data
+    
+    # Healthcheck sin credenciales para evitar logs de error en Docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    # Política de restart para desarrollo (no reiniciar tras fallos intencionales)
+    restart: "no"
+    
+    # Optimización para contenedores ligeros
+    shm_size: 128m
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# VOLÚMENES NOMBRADOS (PERSISTENCIA)
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+volumes:
+  # Volumen nombrado para datos de PostgreSQL entre reinicios
+  pgdata_migrator:
+    driver: local
