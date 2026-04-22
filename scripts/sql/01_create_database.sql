@@ -16,20 +16,20 @@ SET client_min_messages = warning;
 -- Nota: PostgreSQL no soporta "IF NOT EXISTS" en CREATE DATABASE, usamos enfoque con shell
 -- Primero verificamos si existe, luego creamos si es necesario
 
--- ■■■■■■■■■■■ Verificar si la base de datos ya existe ■■■■■■■■■■■■■
+-- ■■■■■■■■■■■ Verificar si la base de datos ya existe (La verificación se maneja en Python) ■■■■■■■■■■■■■
 -- Nota: Usamos variables de entorno para hacerlo dinámico y seguro
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'migrator_ecommerce') THEN
-        RAISE NOTICE 'Base de datos % ya existe. Omitiendo creación.', 'migrator_ecommerce';
-    ELSE
-        RAISE NOTICE 'Creando base de datos %...', 'migrator_ecommerce';
-    END IF;
-END $$;
+-- Solo descomentar si se ejecuta directamente
+--DO $$
+--BEGIN
+--    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'migrator_ecommerce') THEN
+--        RAISE NOTICE 'Base de datos % ya existe. Omitiendo creación.', 'migrator_ecommerce';
+--    ELSE
+--        RAISE NOTICE 'Creando base de datos %...', 'migrator_ecommerce';
+--    END IF;
+--END $$;
 
--- ■■■■■■■■■■■ Crear base de datos (solo si no existe) ■■■■■■■■■■■■■■
+-- ■■■■■■■■■■■ Crear base de datos (solo si no existe) ■■■■■■■■■■■■■■■■
 -- Nota: Usamos el usuario de la variable de entorno para hacerlo dinámico
-\set ON_ERROR_STOP on
 CREATE DATABASE migrator_ecommerce
     WITH 
     OWNER = migrator_user
@@ -39,7 +39,6 @@ CREATE DATABASE migrator_ecommerce
     TABLESPACE = pg_default
     CONNECTION LIMIT = -1
     TEMPLATE = template0;
-\set ON_ERROR_STOP off
 
 -- ■■■■■■■■■■■■ Otorgar permisos básicos al usuario de la variable de entorno ■■■■■■■■■■■■
 -- Esto asegura que la base de datos sea accesible para scripts de migración subsecuentes
@@ -51,13 +50,16 @@ COMMENT ON DATABASE migrator_ecommerce IS 'Base de datos principal de la aplicac
 
 -- ■■■■■■■■■■■■■ Desconectarse de la nueva base de datos para retornar al estado de conexión original ■■■■■■■■■■■■■
 -- Esto previene que scripts subsecuentes se ejecuten accidentalmente contra la base de datos incorrecta
-\c postgres
+-- psycopg2 utiliza dual-connection pattern: primero conecta a postgres, luego a la nueva BD
+-- Solo descomentar si se ejecuta directamente
+-- \c postgres
 
--- ■■■■■■■■■■■■ Mensaje de finalización del script de creación de base de datos ■■■■■■■■■■■■
+-- ■■■■■■■■■■■■ Mensaje de finalización del script de creación de base de datos (La verificación se maneja en Python) ■■■■■■■■■■■■
 -- Esto proporciona retroalimentación clara de que la base de datos está lista para migraciones
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'migrator_ecommerce') THEN
-        RAISE NOTICE 'Script de creación de base de datos completado. Base de datos "migrator_ecommerce" está lista para migraciones.';
-    END IF;
-END $$;
+-- Solo descomentar si se ejecuta directamente
+--DO $$
+--BEGIN
+--    IF EXISTS (SELECT 1 FROM pg_database WHERE datname = 'migrator_ecommerce') THEN
+--        RAISE NOTICE 'Script de creación de base de datos completado. Base de datos "migrator_ecommerce" está lista para migraciones.';
+--    END IF;
+--END $$;

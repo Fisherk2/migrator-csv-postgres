@@ -4,8 +4,6 @@
 # Contenedor efímero para testing del migrador CSV
 # Compatible con Docker Compose 3.8+
 
-version: '3.8'
-
 services:
   # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
   # SERVICIO POSTGRESQL
@@ -17,7 +15,7 @@ services:
     # Nombre del contenedor para debugging
     container_name: migrator_postgres_dev
     
-    # Variables de entorno desde archivo .env (con fallbacks seguros)
+    # Variables de entorno desde archivo .env (POSTGRES_* requerido por PostgreSQL)
     environment:
       POSTGRES_DB: ${DB_NAME:-migrator_ecommerce}
       POSTGRES_USER: ${DB_USER:-migrator_user}
@@ -33,9 +31,9 @@ services:
     volumes:
       - pgdata_migrator:/var/lib/postgresql/data
     
-    # Healthcheck sin credenciales para evitar logs de error en Docker
+    # Healthcheck usando variables POSTGRES_* que existen dentro del contenedor
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-migrator_user} -d ${POSTGRES_DB:-migrator_ecommerce}"]
       interval: 10s
       timeout: 5s
       retries: 5

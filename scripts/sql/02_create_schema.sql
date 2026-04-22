@@ -1,9 +1,10 @@
--- ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+-- 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙
 -- Esquema E-commerce: Migrador CSV - PostgreSQL
--- ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
--- Dominio: customers, products, orders
--- Ejecutar después de 01_create_database.sql
--- Compatible con PostgreSQL 12+
+-- Purpose: Crear el esquema de tablas para el dominio e-commerce
+-- Author: fisherk2
+-- Version: 1.0
+-- Date: 2026-04-16
+-- 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙
 
 -- ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 -- TABLA: CUSTOMERS
@@ -107,8 +108,8 @@ COMMENT ON COLUMN public.orders.customer_id IS 'Cliente que realizó la compra';
 COMMENT ON COLUMN public.orders.order_date IS 'Fecha en que se realizó la orden';
 COMMENT ON COLUMN public.orders.total_amount IS 'Monto total de la orden';
 COMMENT ON COLUMN public.orders.status IS 'Estado actual del proceso';
-COMMENT ON CONSTRAINT fk_orders_customer IS 'Protege historial de órdenes contra eliminación de clientes';
-COMMENT ON CONSTRAINT chk_orders_status IS 'Solo permite estados válidos del proceso';
+COMMENT ON CONSTRAINT fk_orders_customer ON public.orders IS 'Protege historial de órdenes contra eliminación de clientes';
+COMMENT ON CONSTRAINT chk_orders_status ON public.orders IS 'Solo permite estados válidos del proceso';
 
 -- ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 -- ÍNDICES BÁSICOS (performance)

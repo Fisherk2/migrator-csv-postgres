@@ -1,251 +1,611 @@
 #!/bin/bash
 
-# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙 
-# Script de Verificación End-to-End con Zero Tolerance
-# Propósito: Validación completa del entorno, contenedor y migración
-# Autor: fisherk2
-# Versión: 1.0
-# Fecha: 2026-04-17
-# Requisitos: Docker, Docker Compose v2, Python 3.10+, .env
-# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙 
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘
+# SCRIPT DE AUTOMATIZACIÓN DE TESTS - MIGRATOR CSV POSTGRES
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘
+# Propósito: Ejecutar ciclo completo de pruebas con cleanup automático
+# Author: fisherk2
+# Version: 1.0 - Versión inicial
+# Date: 2026-04-20
+# 
+# Principios Aplicados:
+# - Fail-Fast (Clean Code Cap. 19): Detenerse al primer error
+# - Automated Testing (Software Development Cap. 18): Tests reproducibles
+# - Resource Cleanup (DevOps Best Practices): Limpieza automática INCONDICIONAL
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘
 
-
-# ■■■■■■■■■■■■■ Zero tolerance: cualquier error detiene ejecución inmediatamente ■■■■■■■■■■■■■
+# Modo estricto para fail-fast (Clean Code Cap. 19)
 set -euo pipefail
 
-# ▁▂▃▄▅▆▇███████ Configuración de colores y timestamps ███████▇▆▅▄▃▂▁
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# CONFIGURACIÓN INICIAL
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
-# ▁▂▃▄▅▆▇███████ Variables globales para tracking  ███████▇▆▅▄▃▂▁
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+# Colores para output
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m' # No Color
 
-# ■■■■■■■■■■■■■ Función para imprimir mensajes con timestamp ■■■■■■■■■■■■■ 
-print_message() {
-    local color=$1
-    local symbol=$2
-    local message=$3
-    echo -e "${color}[$TIMESTAMP]${symbol} ${message}${NC}"
+# Variables de entorno
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+readonly CONTAINER_NAME="migrator_postgres_dev"
+readonly COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+readonly CONFIG_FILE="$PROJECT_DIR/.env"
+
+# Contadores para estadísticas
+TESTS_TOTAL=0
+TESTS_PASSED=0
+TESTS_FAILED=0
+TESTS_WARNINGS=0
+
+# Tiempo de inicio
+readonly START_TIME=$(date +%s)
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIONES DE LOGGING
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+# Función de timestamp
+timestamp() {
+    date '+%Y-%m-%d %H:%M:%S'
 }
 
-# ■■■■■■■■■■■■■ Verificación de dependencias críticas ■■■■■■■■■■■■■ 
-check_deps() {
-    print_message $BLUE " " "Verificando dependencias del sistema..."
+# Funciones de logging con colores y timestamps (corregidas para set -euo pipefail)
+log_info() {
+    echo -e "${BLUE}[$(timestamp)] INFO:${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[$(timestamp)] SUCCESS:${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[$(timestamp)] WARNING:${NC} $1"
+    # Incremento seguro con manejo de errores
+    TESTS_WARNINGS=$((TESTS_WARNINGS + 1)) || true
+}
+
+log_error() {
+    echo -e "${RED}[$(timestamp)] ERROR:${NC} $1"
+}
+
+log_test() {
+    echo -e "${BLUE}[$(timestamp)] TEST:${NC} $1"
+    # Incremento seguro con manejo de errores
+    TESTS_TOTAL=$((TESTS_TOTAL + 1)) || true
+}
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIÓN DE CLEANUP - CRÍTICA (DevOps Best Practices)
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# Esta función se ejecuta SIEMPRE gracias a trap cleanup EXIT
+# No hay forma de omitirla, incluso con Ctrl+C o errores
+
+cleanup() {
+    log_info " Iniciando cleanup del entorno..."
     
-    local deps=("docker" "docker" "python3" "pip")
-    local missing_deps=()
+    # Determinar el tipo de limpieza basado en el resultado de los tests
+    local cleanup_type="full"  # Por defecto: limpieza completa
     
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" &> /dev/null; then
-            missing_deps+=("$dep")
-        else
-            print_message $GREEN " " " $dep encontrado"
+    # Verificar si los tests pasaron exitosamente (solo verificar que no haya fallidos y que haya pasados)
+    if [[ ${TESTS_FAILED:-0} -eq 0 && ${TESTS_PASSED:-0} -gt 0 ]]; then
+        cleanup_type="success"  # Tests exitosos: limpieza completa
+        log_info "  Tests exitosos detectados - aplicando limpieza completa..."
+    elif [[ ${TESTS_FAILED:-0} -gt 0 ]]; then
+        cleanup_type="failed"  # Tests fallaron: limpieza parcial
+        log_info "  Tests fallaron detectados - aplicando limpieza parcial..."
+    else
+        cleanup_type="partial"  # Ejecución incompleta: limpieza parcial
+        log_info "  Ejecución incompleta - aplicando limpieza parcial..."
+    fi
+    
+    # Detener y eliminar contenedores y volúmenes
+    if docker-compose -f "$COMPOSE_FILE" ps -q | grep -q .; then
+        log_info " Deteniendo contenedores activos..."
+        docker-compose -f "$COMPOSE_FILE" down -v
+        log_success "✅ Contenedores y volúmenes eliminados"
+    else
+        log_info "ℹ️ No hay contenedores activos para eliminar"
+        # Asegurar eliminación de contenedores incluso si no están activos
+        log_info "🧹 Eliminando contenedores residuales..."
+        docker-compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+        log_success "✅ Contenedores residuales eliminados"
+    fi
+    
+    # Limpieza condicional de imágenes según el tipo
+    case "$cleanup_type" in
+        "success")
+            # Tests exitosos: eliminar imagen completamente para liberar espacio
+            log_info "🗑️ Eliminando imagen completamente (tests exitosos)..."
+            if docker images -q "postgres:15-alpine" | grep -q .; then
+                docker rmi postgres:15-alpine 2>/dev/null || true
+                log_success "✅ Imagen PostgreSQL eliminada (espacio liberado)"
+            fi
+            
+            # Eliminar imágenes huérfanas
+            log_info "🧹 Limpiando imágenes huérfanas..."
+            if docker images -f "dangling=true" -q | grep -q .; then
+                docker rmi $(docker images -f "dangling=true" -q) 2>/dev/null || true
+                log_success "✅ Imágenes huérfanas eliminadas"
+            else
+                log_info "ℹ️ No hay imágenes huérfanas para eliminar"
+            fi
+            ;;
+            
+        "failed")
+            # Tests fallaron: eliminar solo caché para reconstrucción rápida
+            log_info "🔄 Eliminando caché de imagen (tests fallaron)..."
+            if docker images -q "postgres:15-alpine" | grep -q .; then
+                # Forzar reconstrucción sin descargar nuevamente
+                docker builder prune -f 2>/dev/null || true
+                log_success "✅ Caché de Docker eliminado (reconstrucción rápida)"
+            fi
+            ;;
+            
+        "partial")
+            # Ejecución incompleta: limpieza básica
+            log_info "🧹 Aplicando limpieza básica (ejecución parcial)..."
+            # Solo limpiar contenedores y volúmenes, mantener imagen
+            ;;
+    esac
+    
+    log_success "✅ Cleanup completado ($cleanup_type)"
+}
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# CONFIGURACIÓN DE TRAP - GARANTIZA LIMPIEZA INCONDICIONAL
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# trap cleanup EXIT se ejecuta:
+# - Al final normal del script
+# - Con exit 1, 2, etc.
+# - Con Ctrl+C (SIGINT)
+# - Con kill (SIGTERM)
+# - Con cualquier error no manejado
+
+trap cleanup EXIT
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIONES DE VERIFICACIÓN
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+# Verificar prerequisitos
+check_prerequisites() {
+    log_info "🔍 Verificando prerequisitos..."
+    
+    # Verificar Docker
+    if ! command -v docker &> /dev/null; then
+        log_error "❌ Docker no está instalado"
+        exit 2
+    fi
+    
+    # Verificar Docker Compose
+    if ! command -v docker-compose &> /dev/null; then
+        log_error "❌ Docker Compose no está instalado"
+        exit 2
+    fi
+    
+    # Verificar archivo de configuración
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        log_error "❌ Archivo de configuración no encontrado: $CONFIG_FILE"
+        log_info "💡 Copia .env.example a .env"
+        exit 2
+    fi
+    
+    # Verificar psql
+    if ! command -v psql &> /dev/null; then
+        log_error "❌ psql no está instalado"
+        exit 2
+    fi
+    
+    log_success "✅ Prerequisitos verificados"
+}
+
+# Cargar configuración
+load_config() {
+    log_info "📋 Cargando configuración desde $CONFIG_FILE"
+    
+    # Verificar que el archivo existe
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        log_error "❌ Archivo de configuración no encontrado: $CONFIG_FILE"
+        log_info "💡 Copia .env.example a .env"
+        exit 2
+    fi
+    
+    # Cargar variables de entorno con manejo de errores
+    if ! bash -n "$CONFIG_FILE" 2>/dev/null; then
+        log_error "❌ Error de sintaxis en archivo de configuración: $CONFIG_FILE"
+        exit 2
+    fi
+    
+    set -a
+    if ! source "$CONFIG_FILE" 2>/dev/null; then
+        log_error "❌ Error al cargar archivo de configuración: $CONFIG_FILE"
+        exit 2
+    fi
+    set +a
+    
+    # Validar variables críticas con valores por defecto
+    DB_HOST="${DB_HOST:-localhost}"
+    DB_PORT="${DB_PORT:-5432}"
+    DB_NAME="${DB_NAME:-migrator_ecommerce}"
+    DB_USER="${DB_USER:-migrator_user}"
+    DB_PASSWORD="${DB_PASSWORD:-pimpumpapas}"
+    
+    # Validar variables críticas con valores por defecto
+    local required_vars=("DB_HOST" "DB_PORT" "DB_NAME" "DB_USER" "DB_PASSWORD")
+    for var in "${required_vars[@]}"; do
+        if [[ -z "${!var:-}" ]]; then
+            log_error "❌ Variable requerida no configurada: $var"
+            exit 2
         fi
     done
     
-    if [ ${#missing_deps[@]} -gt 0 ]; then
-        print_message $RED " " "Dependencias faltantes: ${missing_deps[*]}"
-        print_message $YELLOW " " "Instala las dependencias y reintenta"
-        exit 1
-    fi
-    
-    # Verificar Docker Compose v2
-    if ! docker compose version &> /dev/null; then
-        print_message $RED " " "Docker Compose v2 no encontrado"
-        print_message $YELLOW " " "Actualiza a Docker Compose v2 nativo"
-        exit 1
-    fi
-    
-    # Verificar archivo .env
-    if [ ! -f "$PROJECT_ROOT/.env" ]; then
-        print_message $RED " " "Archivo .env no encontrado en $PROJECT_ROOT"
-        print_message $YELLOW " " "Crea .env desde .env.example"
-        exit 1
-    fi
-    
-    print_message $GREEN " " "Todas las dependencias verificadas"
+    log_success "✅ Configuración cargada"
+    log_info "📋 Conectando a: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 }
 
-# ■■■■■■■■■■■■■ Levantar stack Docker con healthcheck ■■■■■■■■■■■■■ 
-start_stack() {
-    print_message $BLUE " " "Levantando stack Docker..."
-    
-    cd "$PROJECT_ROOT"
-    
-    # Verificar si ya está corriendo
-    if docker compose ps -q | grep -q .; then
-        print_message $YELLOW " " "Stack ya corriendo, deteniendo primero..."
-        docker compose down
-    fi
-    
-    # Levantar en modo detached
-    docker compose up -d
-    
-    print_message $GREEN " " "Stack levantado exitosamente"
-}
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIÓN DE ESPERA Y HEALTH CHECK
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
-# ■■■■■■■■■■■■■ Esperar healthcheck de PostgreSQL con timeout ■■■■■■■■■■■■■ 
-wait_db() {
-    print_message $BLUE " " "Esperando healthcheck de PostgreSQL..."
+wait_for_postgres() {
+    log_info "⏳ Esperando a que PostgreSQL inicie..."
     
-    local timeout=30
-    local interval=2
-    local elapsed=0
+    echo "🔍 DEBUG: Variables en wait_for_postgres:"
+    echo "   CONTAINER_NAME = $CONTAINER_NAME"
+    echo "   DB_USER = $DB_USER"
+    echo "   DB_NAME = $DB_NAME"
     
-    while [ $elapsed -lt $timeout ]; do
-        if docker compose exec -T postgres pg_isready -U "${DB_USER:-migrator_user}" &> /dev/null; then
-            print_message $GREEN " " "PostgreSQL está healthy"
+    # Verificar que el contenedor existe y está corriendo
+    echo "🔍 DEBUG: Verificando contenedor..."
+    if ! docker-compose -f "$COMPOSE_FILE" ps -q | grep -q .; then
+        echo "❌ ERROR: Contenedor $CONTAINER_NAME no encontrado o no corriendo"
+        echo "🔍 DEBUG: Contenedores activos:"
+        docker-compose -f "$COMPOSE_FILE" ps
+        exit 1
+    fi
+    echo "✅ Contenedor $CONTAINER_NAME encontrado y corriendo"
+    
+    # Probar pg_isready directamente
+    echo "🔍 DEBUG: Probando pg_isready..."
+    echo "🔍 DEBUG: Probando pg_isready..."
+    if docker exec "$CONTAINER_NAME" pg_isready --help &>/dev/null; then
+        echo "✅ pg_isready disponible en el contenedor"
+    else
+        echo "❌ ERROR: pg_isready no disponible en el contenedor"
+        echo "🔍 DEBUG: Probando conexión alternativa..."
+        # Alternativa: intentar conexión directa
+        if docker exec "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" &>/dev/null; then
+            echo "✅ Conexión directa funciona"
+            log_success "✅ PostgreSQL está listo (verificación directa)"
             return 0
+        else
+            echo "❌ ERROR: Ni pg_isready ni conexión directa funcionan"
+            exit 1
+        fi
+    fi
+    
+    local timeout=60
+    local count=0
+    
+    echo "🔍 DEBUG: Iniciando bucle de espera..."
+    while [[ $count -lt $timeout ]]; do
+        echo -n "🔍 DEBUG: Intento $((count + 1))/$timeout - "
+        if docker exec "$CONTAINER_NAME" pg_isready -U "$DB_USER" -d "$DB_NAME" 2>&1; then
+            echo "✅ PostgreSQL está listo"
+            log_success "✅ PostgreSQL está listo"
+            return 0
+        else
+            echo "❌ PostgreSQL no listo aún"
         fi
         
-        print_message $YELLOW " " "Esperando PostgreSQL... (${elapsed}s/${timeout}s)"
-        sleep $interval
-        elapsed=$((elapsed + interval))
+        echo -n "."
+        sleep 1
+        count=$((count + 1))
     done
     
-    print_message $RED " " "Timeout esperando PostgreSQL healthcheck"
-    return 1
+    echo
+    log_error "❌ Timeout esperando a PostgreSQL"
+    exit 1
 }
 
-# ■■■■■■■■■■■■■ Ejecutar inicialización de base de datos ■■■■■■■■■■■■■ 
-run_init_db() {
-    print_message $BLUE " " "Ejecutando inicialización de base de datos..."
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# PASO 1: CREAR CONTENEDOR
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+create_container() {
+    log_test "🐳 Creando contenedor Docker..."
     
-    cd "$PROJECT_ROOT"
+    # Verificar variables críticas
+    log_info "📋 COMPOSE_FILE = $COMPOSE_FILE"
+    log_info "📋 Directorio actual = $(pwd)"
     
-    if python3 scripts/init_db.py; then
-        print_message $GREEN " " "Base de datos inicializada exitosamente"
-        return 0
-    else
-        print_message $RED " " "Error en inicialización de base de datos"
-        return 1
+    # Verificar que el archivo docker-compose.yml existe
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        log_error "❌ Archivo docker-compose.yml no encontrado: $COMPOSE_FILE"
+        exit 1
     fi
-}
-
-# ■■■■■■■■■■■■■ Ejecutar migración de prueba (dry-run) ■■■■■■■■■■■■■ 
-run_migration_test() {
-    print_message $BLUE " " "Ejecutando migración de prueba..."
     
-    cd "$PROJECT_ROOT"
+    # Verificar que Docker está disponible
+    if ! command -v docker &> /dev/null; then
+        log_error "❌ Docker no está disponible"
+        exit 1
+    fi
     
-    # Crear CSV de prueba pequeño
-    echo "id,name,email,phone
-1,Test User,test@example.com,+1-555-0123" > test_migration.csv
+    if ! command -v docker-compose &> /dev/null; then
+        log_error "❌ Docker Compose no está disponible"
+        exit 1
+    fi
     
-    # Verificar si existe script de migración
-    if [ -f "scripts/run_migration.py" ]; then
-        if python3 scripts/run_migration.py --dry-run --source test_migration.csv; then
-            print_message $GREEN " " "Migración de prueba exitosa"
-            rm -f test_migration.csv
-            return 0
+    # Reconstruir imagen y crear contenedor con captura de errores
+    log_info "🔨 Reconstruyendo imagen PostgreSQL (sin caché)..."
+    if docker-compose -f "$COMPOSE_FILE" build --no-cache 2>&1; then
+        log_success "✅ Imagen reconstruida exitosamente"
+    else
+        log_error "❌ Error al reconstruir imagen"
+        log_info "📋 Verificando logs de construcción..."
+        docker-compose -f "$COMPOSE_FILE" build --no-cache 2>&1
+        exit 1
+    fi
+    
+    log_info "🐳 Creando contenedor Docker..."
+    if docker-compose -f "$COMPOSE_FILE" up -d 2>&1; then
+        log_success "✅ Contenedor creado exitosamente"
+        # Incremento seguro
+        TESTS_PASSED=$((TESTS_PASSED + 1)) || true
+        
+        # Verificar que el contenedor está corriendo
+        if docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
+            log_success "✅ Contenedor está corriendo"
         else
-            print_message $RED " " "Error en migración de prueba"
-            rm -f test_migration.csv
-            return 1
+            log_error "❌ Contenedor no está corriendo después de creación"
+            docker-compose -f "$COMPOSE_FILE" ps
+            exit 1
         fi
     else
-        print_message $YELLOW " " "Script run_migration.py no encontrado, omitiendo prueba"
-        rm -f test_migration.csv
-        return 0
+        log_error "❌ Error al crear contenedor"
+        log_info "📋 Verificando logs de Docker Compose..."
+        docker-compose -f "$COMPOSE_FILE" logs --tail=20
+        exit 1
+    fi
+    
+    # Esperar a que PostgreSQL inicie
+    wait_for_postgres
+}
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# PASO 2: VERIFICAR CONEXIÓN
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+verify_connection() {
+    log_test "🔌 Verificando conexión a PostgreSQL..."
+    
+    echo "🔍 DEBUG: Variables de conexión:"
+    echo "   DB_HOST = $DB_HOST"
+    echo "   DB_PORT = $DB_PORT"
+    echo "   DB_USER = $DB_USER"
+    echo "   DB_NAME = $DB_NAME"
+    echo "   DB_PASSWORD = [OCULTA]"
+    
+    # Verificar que el contenedor está corriendo
+    echo " DEBUG: Verificando estado del contenedor..."
+    if docker-compose -f "$COMPOSE_FILE" ps -q | grep -q .; then
+        echo " Contenedor está corriendo"
+        docker-compose -f "$COMPOSE_FILE" ps
+    else
+        echo "❌ Contenedor no está corriendo"
+        exit 1
+    fi
+    
+    # Verificar que el puerto está mapeado
+    echo " DEBUG: Verificando mapeo de puertos..."
+    echo "🔍 DEBUG: Verificando mapeo de puertos..."
+    local port_mapping
+    port_mapping=$(docker port "$CONTAINER_NAME" 5432 2>/dev/null || echo "NO_MAPEADO")
+    echo "   Port mapping 5432: $port_mapping"
+    
+    # Intentar conexión con detalles
+    echo "🔍 DEBUG: Intentando conexión psql..."
+    echo "   Comando: PGPASSWORD=\"*****\" psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c \"SELECT 1;\""
+    
+    # Probar conexión con output visible para debugging
+    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" 2>&1; then
+        echo "✅ Comando psql ejecutado exitosamente"
+        log_success "✅ Conexión exitosa a PostgreSQL"
+        TESTS_PASSED=$((TESTS_PASSED + 1)) || true
+    else
+        echo "❌ ERROR: Comando psql falló"
+        echo "🔍 DEBUG: Probando conexión alternativa con docker exec..."
+        
+        # Alternativa: probar conexión desde dentro del contenedor
+        if docker exec "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" &>/dev/null; then
+            echo "✅ Conexión desde dentro del contenedor funciona"
+            echo "❌ ERROR: El problema es la conexión desde el host (posible problema de puerto o red)"
+        else
+            echo "❌ ERROR: Ni siquiera funciona desde dentro del contenedor"
+        fi
+        
+        log_error "❌ Error de conexión a PostgreSQL"
+        exit 1
     fi
 }
 
-# ■■■■■■■■■■■■■ Validar outputs esperados ■■■■■■■■■■■■■ 
-validate_outputs() {
-    print_message $BLUE " " "Validando outputs esperados..."
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# PASO 3: APLICAR MIGRACIONES
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+apply_migrations() {
+    log_info "📦 Aplicando migraciones con init_db.py..."
     
-    cd "$PROJECT_ROOT"
+    # Verificar que el script init_db.py existe
+    if [[ ! -f "$PROJECT_DIR/scripts/init_db.py" ]]; then
+        log_error "❌ Script init_db.py no encontrado en: $PROJECT_DIR/scripts/"
+        exit 1
+    fi
     
-    # Verificar logs limpios (sin errores críticos)
-    if docker compose logs postgres | grep -qi "error\|fatal\|failed"; then
-        print_message $RED " " "Se encontraron errores en logs de PostgreSQL"
+    # Verificar y activar entorno virtual si existe
+    local venv_path="$PROJECT_DIR/.venv"
+    if [[ -d "$venv_path" ]]; then
+        log_info "🐍 Entorno virtual detectado, activando..."
+        if [[ -f "$venv_path/bin/activate" ]]; then
+            source "$venv_path/bin/activate"
+            log_success "✅ Entorno virtual activado"
+        elif [[ -f "$venv_path/bin/activate.fish" ]]; then
+            source "$venv_path/bin/activate.fish"
+            log_success "✅ Entorno virtual (fish) activado"
+        else
+            log_warning "⚠️ Entorno virtual encontrado pero no hay script de activación"
+        fi
+    else
+        log_info "ℹ️ No se encontró entorno virtual, usando Python global"
+    fi
+    
+    # Verificar dependencias de Python
+    log_test "🔍 Verificando dependencias de Python..."
+    if ! python3 -c "import psycopg2; print('psycopg2 disponible')" 2>/dev/null; then
+        log_error "❌ psycopg2 no está disponible. Instala con: pip install psycopg2-binary"
+        exit 1
+    fi
+    log_success "✅ Dependencias de Python verificadas"
+    
+    # Ejecutar script init_db.py con variables de entorno exportadas
+    log_test "▶️ Ejecutando scripts/init_db.py..."
+    
+    # Asegurar que las variables de entorno estén disponibles para el script Python
+    export DB_HOST="$DB_HOST"
+    export DB_PORT="$DB_PORT"
+    export DB_NAME="$DB_NAME"
+    export DB_USER="$DB_USER"
+    export DB_PASSWORD="$DB_PASSWORD"
+    
+    # Ejecutar el script Python desde el directorio del proyecto
+    cd "$PROJECT_DIR"
+    if python3 scripts/init_db.py; then
+        log_success "✅ Migraciones aplicadas exitosamente via init_db.py"
+        ((TESTS_PASSED++))
+    else
+        log_error "❌ Error al ejecutar scripts/init_db.py"
+        exit 1
+    fi
+}
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# PASO 4: TESTS UNITARIOS DEL SCHEMA
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+run_schema_tests() {
+    log_test "🧪 Ejecutando tests unitarios del schema con test_schema_operations.sql..."
+    
+    # Verificar que el script de tests existe
+    local test_script="$PROJECT_DIR/scripts/sql/test_schema_operations.sql"
+    if [[ ! -f "$test_script" ]]; then
+        log_error "❌ Script de tests no encontrado: $test_script"
+        exit 1
+    fi
+    
+    # Ejecutar tests unitarios usando psql (compatible con RAISE NOTICE)
+    log_info "  Ejecutando tests unitarios con rollback automático..."
+    
+    # Capturar salida para analizar resultados de tests
+    local test_output
+    test_output=$(PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$test_script" 2>&1)
+    local exit_code=$?
+    
+    # Mostrar salida completa
+    echo "$test_output"
+    
+    # Analizar salida para detectar tests fallidos y rollback parcial
+    local failed_tests
+    failed_tests=$(echo "$test_output" | grep -c "TEST FAILED" || true)
+    local passed_tests
+    passed_tests=$(echo "$test_output" | grep -c "TEST PASSED" || true)
+    local rollback_partial
+    rollback_partial=$(echo "$test_output" | grep -c "rollback parcial" || true)
+    
+    # Actualizar contadores según resultados
+    if [[ $failed_tests -gt 0 ]]; then
+        log_error "  Se detectaron $failed_tests tests fallidos"
+        ((TESTS_FAILED += failed_tests))
+        # Solo sumar los que realmente pasaron (no contar fallidos)
+        ((TESTS_PASSED += passed_tests - failed_tests))
+        return 1
+    elif [[ $rollback_partial -gt 0 ]]; then
+        log_warning "  Tests pasaron pero hay rollback parcial - datos persistieron"
+        ((TESTS_PASSED += passed_tests))
+        ((TESTS_WARNINGS++))
+        return 1  # Tratar rollback parcial como fallo para limpieza parcial
+    elif [[ $exit_code -eq 0 && $passed_tests -gt 0 ]]; then
+        log_success "  Tests unitarios ejecutados exitosamente ($passed_tests tests pasaron)"
+        ((TESTS_PASSED += passed_tests))
+    else
+        log_error "  Error en ejecución de tests unitarios (código: $exit_code)"
+        ((TESTS_FAILED++))
         return 1
     fi
-    
-    # Verificar que las tablas existen
-    local db_name="${DB_NAME:-migrator_ecommerce}"
-    local tables=("customers" "products" "orders")
-    
-    for table in "${tables[@]}"; do
-        if ! docker compose exec -T postgres psql -U "${DB_USER:-migrator_user}" -d "$db_name" -c "SELECT 1 FROM information_schema.tables WHERE table_name='$table';" | grep -q 1; then
-            print_message $RED " " "Tabla '$table' no encontrada"
-            return 1
-        fi
-    done
-    
-    print_message $GREEN " " "Todas las validaciones de outputs pasaron"
-    return 0
 }
 
-# ■■■■■■■■■■■■■ Limpieza en caso de fallo (mantener imagen para debugging) ■■■■■■■■■■■■■ 
-cleanup_on_fail() {
-    print_message $RED " " "Ejecutando limpieza por fallo..."
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# PASO 5: RESUMEN FINAL
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+show_summary() {
+    local end_time=$(date +%s)
+    local duration=$((end_time - START_TIME))
     
-    cd "$PROJECT_ROOT"
+    echo
+    echo "============================================================================"
+    log_info "📊 RESUMEN FINAL DE TESTS"
+    echo "============================================================================"
+    log_info "⏱️ Tiempo total de ejecución: ${duration}s"
+    log_info "📈 Total de tests ejecutados: $TESTS_TOTAL"
+    log_success "✅ Tests pasados: $TESTS_PASSED"
     
-    # Detener y eliminar contenedor y volumen, mantener imagen para depuración
-    docker compose down
-    docker rm -f migrator_postgres_dev 2>/dev/null || true
+    if [[ $TESTS_FAILED -gt 0 ]]; then
+        log_error "❌ Tests fallidos: $TESTS_FAILED"
+    fi
     
-    print_message $YELLOW " " "Contenedor y volumen eliminados, imagen conservada para debugging"
+    if [[ $TESTS_WARNINGS -gt 0 ]]; then
+        log_warning "⚠️ Advertencias: $TESTS_WARNINGS"
+    fi
+    
+    echo "============================================================================"
+    
+    # Exit code basado en resultados
+    if [[ $TESTS_FAILED -eq 0 ]]; then
+        log_success "🎉 TODOS LOS TESTS PASARON - SISTEMA FUNCIONAL"
+        exit 0
+    else
+        log_error "💥 HAY TESTS FALLIDOS - REVISAR EL SISTEMA"
+        exit 1
+    fi
 }
 
-# ■■■■■■■■■■■■■ Limpieza en caso de éxito (eliminar todo incluyendo imagen) ■■■■■■■■■■■■■ 
-cleanup_on_success() {
-    print_message $GREEN " " "Ejecutando limpieza exitosa..."
-    
-    cd "$PROJECT_ROOT"
-    
-    # Eliminar todo incluyendo contenedor, volúmenes e imagen
-    docker compose down -v
-    docker rmi migrator_postgres_dev:latest 2>/dev/null || true
-    
-    print_message $GREEN " " "Limpieza completa exitosa (imagen eliminada)"
-}
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIÓN PRINCIPAL - ORQUESTACIÓN
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
-# ■■■■■■■■■■■■■ Función principal con zero tolerance ■■■■■■■■■■■■■ 
 main() {
-    print_message $BLUE " " "Iniciando verificación end-to-end..."
-    echo
+    echo "============================================================================"
+    log_info "🚀 INICIANDO CICLO COMPLETO DE TESTS - MIGRATION CSV POSTGRES"
+    echo "============================================================================"
     
-    # Trap global para limpieza en caso de interrupción
-    trap cleanup_on_fail EXIT
-    
-    # Ejecutar pasos secuenciales con validación explícita
-    check_deps || { cleanup_on_fail; exit 1; }
-    echo
-    
-    start_stack || { cleanup_on_fail; exit 1; }
-    echo
-    
-    wait_db || { cleanup_on_fail; exit 1; }
-    echo
-    
-    run_init_db || { cleanup_on_fail; exit 1; }
-    echo
-    
-    run_migration_test || { cleanup_on_fail; exit 1; }
-    echo
-    
-    validate_outputs || { cleanup_on_fail; exit 1; }
-    echo
-    
-    # Éxito: cambiar trap y limpiar completamente
-    trap - EXIT
-    cleanup_on_success
-    echo
-    
-    print_message $GREEN " " " Verificación completada exitosamente!"
-    print_message $GREEN " " "Todos los componentes funcionan correctamente"
-    exit 0
+    # Ejecutar pasos en orden
+    check_prerequisites
+    load_config
+    create_container
+    verify_connection
+    apply_migrations
+    run_schema_tests
+    show_summary
 }
 
-# ■■■■■■■■■■■■■ Ejecutar si se llama directamente ■■■■■■■■■■■■■ 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# EJECUCIÓN
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+# Ejecutar función principal
+log_info "🚀 Iniciando ejecución principal..."
+main "$@"

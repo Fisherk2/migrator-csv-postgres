@@ -45,6 +45,16 @@
       "source": "wshobson/agents",
       "sourceType": "github",
       "computedHash": "f263ed30e7627f1f22aea99f0f098b73a9f3b5f1c9ea36d3a31a787eacf2e07e"
+    },
+    "solid": {
+      "source": "ramziddin/solid-skills",
+      "sourceType": "github",
+      "computedHash": "60de610a3c143f79f69552b7da60298bb46c9e8d80ab16c4c111b025823345d1"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "computedHash": "72e9ab72627e4fd8ed26a582e82309a98ecdc4f6e1c99418430ac05682c9e91d"
     }
   }
 }

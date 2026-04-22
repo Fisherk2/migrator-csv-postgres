@@ -61,9 +61,44 @@ class DatabaseInitializer:
         self.scripts = [
             "01_create_database.sql",
             "02_create_schema.sql", 
-            "03_create_indexes.sql",
-            "04_seed_sample_data.sql"
+            "03_create_indexes.sql"
         ]
+    
+    def _create_database(self, conn: connection) -> bool:
+        """
+        Ejecuta el script de creación de base de datos con autocommit=True.
+        
+        Returns:
+            True si éxito, False si fallo
+        """
+        script_path = self.sql_scripts_dir / "01_create_database.sql"
+        if not script_path.exists():
+            logger.error("Script 01_create_database.sql no encontrado")
+            return False
+        
+        try:
+            # Configurar autocommit para CREATE DATABASE
+            conn.autocommit = True
+            logger.info("Usando autocommit=True para CREATE DATABASE")
+            
+            with conn.cursor() as cursor:
+                logger.info("Ejecutando creación de base de datos desde 01_create_database.sql")
+                
+                # Leer y ejecutar script SQL
+                with open(script_path, 'r', encoding='utf-8') as f:
+                    sql_content = f.read()
+                
+                cursor.execute(sql_content)
+                
+                logger.info("Completado: creación de base de datos")
+                return True
+                
+        except DatabaseError as e:
+            logger.error(f"Error en creación de base de datos: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error inesperado en creación de base de datos: {e}")
+            return False
     
     def _execute_sql_file(
         self, 
@@ -72,7 +107,7 @@ class DatabaseInitializer:
         description: str
     ) -> bool:
         """
-        Ejecuta un archivo SQL dentro de una transacción explícita.
+        Ejecuta un archivo SQL dentro de una transacción explícita (para scripts normales).
         
         Returns:
             True si éxito, False si fallo
@@ -83,26 +118,23 @@ class DatabaseInitializer:
             return False
         
         try:
+            # Configurar transacción normal (no autocommit)
+            conn.autocommit = False
+            
             with conn.cursor() as cursor:
-                
-                # ■■■■■■■■■■■■■ Iniciar transacción explícita ■■■■■■■■■■■■■
-                conn.autocommit = False
-                
                 logger.info(f"Ejecutando {description} desde {script_name}")
                 
-                # ■■■■■■■■■■■■■ Leer y ejecutar script SQL ■■■■■■■■■■■■■
+                # Leer y ejecutar script SQL
                 with open(script_path, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
                 
                 cursor.execute(sql_content)
-                
-                # ■■■■■■■■■■■■■ Confirmar transacción ■■■■■■■■■■■■■
                 conn.commit()
+                
                 logger.info(f"Completado: {description}")
                 return True
                 
         except DatabaseError as e:
-            # ■■■■■■■■■■■■■ Rollback en error ■■■■■■■■■■■■■
             conn.rollback()
             logger.error(f"Error en {description}: {e}")
             return False
@@ -110,9 +142,6 @@ class DatabaseInitializer:
             conn.rollback()
             logger.error(f"Error inesperado en {description}: {e}")
             return False
-        finally:
-            # ■■■■■■■■■■■■■ Restaurar autocommit ■■■■■■■■■■■■■
-            conn.autocommit = True
     
     def _create_connection(self, dbname: str) -> connection:
         """Crea conexión a base de datos con manejo de errores."""
@@ -139,13 +168,22 @@ class DatabaseInitializer:
             logger.info("=== FASE 1: Creación de base de datos ===")
             conn_maintenance = self._create_connection("postgres")
             
-            # ▲▲▲▲▲▲ Ejecutar script 01_create_database.sql ▲▲▲▲▲▲
-            if not self._execute_sql_file(
-                conn_maintenance, 
-                self.scripts[0],
-                "creación de base de datos"
-            ):
-                return False
+            # ▲▲▲▲▲ Verificar si base de datos ya existe ▲▲▲▲▲▲
+            with conn_maintenance.cursor() as cursor:
+                cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (self.config.db_name,))
+                db_exists = cursor.fetchone()
+                
+                if db_exists:
+                    logger.info(f"Base de datos {self.config.db_name} ya existe. Omitiendo creación.")
+                else:
+                    logger.info(f"Creando base de datos {self.config.db_name}...")
+                    
+                    # ▲▲▲▲▲▲ Ejecutar script 01_create_database.sql con función exclusiva ▲▲▲▲▲▲
+                    if not self._create_database(conn_maintenance):
+                        return False
+                    
+                    # ▲▲▲▲▲▲ Mensaje de finalización de creación de BD ▲▲▲▲▲▲
+                    logger.info(f"Script de creación de base de datos completado. Base de datos '{self.config.db_name}' está lista para migraciones.")
             
             # ▲▲▲▲▲▲ Cerrar conexión de mantenimiento ▲▲▲▲▲▲
             conn_maintenance.close()
@@ -158,8 +196,7 @@ class DatabaseInitializer:
             # ▲▲▲▲▲▲ Ejecutar scripts restantes en secuencia ▲▲▲▲▲▲
             remaining_scripts = [
                 (self.scripts[1], "creación de esquema"),
-                (self.scripts[2], "creación de índices"),
-                (self.scripts[3], "datos de prueba")
+                (self.scripts[2], "creación de índices")
             ]
             
             for script_name, description in remaining_scripts:
@@ -174,11 +211,17 @@ class DatabaseInitializer:
             return False
         finally:
             
-            # ▲▲▲▲▲▲ Asegurar cierre de conexiones ▲▲▲▲▲▲
-            if conn_maintenance:
-                conn_maintenance.close()
-            if conn_target:
-                conn_target.close()
+            # ▲▲▲▲▲▲ Asegurar cierre de conexiones (solo si existen) ▲▲▲▲▲▲
+            if conn_maintenance is not None:
+                try:
+                    conn_maintenance.close()
+                except:
+                    pass  # Ignorar errores al cerrar
+            if conn_target is not None:
+                try:
+                    conn_target.close()
+                except:
+                    pass  # Ignorar errores al cerrar
 
 
 def parse_arguments() -> argparse.Namespace:
