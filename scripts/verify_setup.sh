@@ -78,6 +78,10 @@ log_test() {
     TESTS_TOTAL=$((TESTS_TOTAL + 1)) || true
 }
 
+log_debug() {
+    echo -e "${YELLOW}[$(timestamp)] DEBUG:${NC} $1" >&2
+}
+
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 # FUNCIÓN DE CLEANUP - CRÍTICA (DevOps Best Practices)
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
@@ -171,7 +175,6 @@ trap cleanup EXIT
 # FUNCIONES DE VERIFICACIÓN
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
-# Verificar prerequisitos
 check_prerequisites() {
     log_info "🔍 Verificando prerequisitos..."
     
@@ -201,9 +204,30 @@ check_prerequisites() {
     fi
     
     log_success "✅ Prerequisitos verificados"
+    
+    # Verificar si contenedor está corriendo
+    log_info " Verificando si contenedor PostgreSQL ya está corriendo..."
+    
+    # Verificar que el archivo docker-compose.yml existe
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        log_warning " Archivo docker-compose.yml no encontrado: $COMPOSE_FILE"
+        return 1
+    fi
+    
+    # Verificar si el contenedor está corriendo
+    if docker-compose -f "$COMPOSE_FILE" ps -q | grep -q .; then
+        log_success " Contenedor $CONTAINER_NAME encontrado y corriendo"
+        return 0
+    else
+        log_info " Contenedor $CONTAINER_NAME no está corriendo"
+        return 1
+    fi
 }
 
-# Cargar configuración
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIÓN DE CARGA DE CONFIGURACIÓN
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
 load_config() {
     log_info "📋 Cargando configuración desde $CONFIG_FILE"
     
@@ -313,67 +337,83 @@ wait_for_postgres() {
 }
 
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-# PASO 1: CREAR CONTENEDOR
+# PASO 1: CONFIGURACIÓN DE ENTORNO
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
-create_container() {
-    log_test "🐳 Creando contenedor Docker..."
+setup_environment() {
+    # log_debug "🔍 DEBUG: Iniciando setup_environment"
     
-    # Verificar variables críticas
-    log_info "📋 COMPOSE_FILE = $COMPOSE_FILE"
-    log_info "📋 Directorio actual = $(pwd)"
+    # Verificar prerequisitos básicos y estado del contenedor
+    local container_running=false
+    local run_schema_exists=false
     
-    # Verificar que el archivo docker-compose.yml existe
-    if [[ ! -f "$COMPOSE_FILE" ]]; then
-        log_error "❌ Archivo docker-compose.yml no encontrado: $COMPOSE_FILE"
-        exit 1
-    fi
-    
-    # Verificar que Docker está disponible
-    if ! command -v docker &> /dev/null; then
-        log_error "❌ Docker no está disponible"
-        exit 1
-    fi
-    
-    if ! command -v docker-compose &> /dev/null; then
-        log_error "❌ Docker Compose no está disponible"
-        exit 1
-    fi
-    
-    # Reconstruir imagen y crear contenedor con captura de errores
-    log_info "🔨 Reconstruyendo imagen PostgreSQL (sin caché)..."
-    if docker-compose -f "$COMPOSE_FILE" build --no-cache 2>&1; then
-        log_success "✅ Imagen reconstruida exitosamente"
+    # Verificar prerequisitos y estado del contenedor en una sola función
+    if check_prerequisites; then
+        container_running=true
     else
-        log_error "❌ Error al reconstruir imagen"
-        log_info "📋 Verificando logs de construcción..."
-        docker-compose -f "$COMPOSE_FILE" build --no-cache 2>&1
-        exit 1
+        container_running=false
     fi
     
-    log_info "🐳 Creando contenedor Docker..."
-    if docker-compose -f "$COMPOSE_FILE" up -d 2>&1; then
-        log_success "✅ Contenedor creado exitosamente"
-        # Incremento seguro
-        TESTS_PASSED=$((TESTS_PASSED + 1)) || true
+    # Verificar si run_schema.sh existe
+    if [[ -f "$SCRIPT_DIR/run_schema.sh" ]]; then
+        run_schema_exists=true
+        log_info "📋 Script run_schema.sh encontrado"
+    else
+        log_info "📋 Script run_schema.sh no encontrado - usando modo independiente"
+    fi
+    
+    # Lógica de bajo acoplamiento
+    if [[ "$container_running" == true ]] && [[ "$run_schema_exists" == true ]]; then
+        log_info "🚀 FASE 1: Contenedor ya corriendo - omitiendo run_schema.sh"
+        log_success "✅ Entorno ya configurado (contenedor existente)"
+        ((TESTS_PASSED++))
+        # log_debug "🔍 DEBUG: setup_environment completado - contenedor existente"
+        return 0
+    elif [[ "$run_schema_exists" == true ]] && [[ "$container_running" == false ]]; then
+        log_info "🚀 FASE 1: Ejecutando configuración completa con run_schema.sh..."
+        # log_debug "🔍 DEBUG: Ejecutando bash '$SCRIPT_DIR/run_schema.sh'"
+        # log_debug "🔍 DEBUG: A punto de ejecutar run_schema.sh"
         
-        # Verificar que el contenedor está corriendo
-        if docker-compose -f "$COMPOSE_FILE" ps | grep -q "Up"; then
-            log_success "✅ Contenedor está corriendo"
+        # Ejecutar run_schema.sh con manejo robusto de errores
+        # Mantenemos trap cleanup pero usamos subshell para aislar la ejecución
+        # log_debug "🔍 DEBUG: Ejecutando run_schema.sh en subshell para mantener trap cleanup"
+        
+        local run_schema_result=0
+        if output=$(bash "$SCRIPT_DIR/run_schema.sh" 2>&1); then
+            run_schema_result=0
+            echo "$output"
+            # log_debug "🔍 DEBUG: run_schema.sh ejecutado, código de salida: $?"
+            log_success "✅ Entorno configurado exitosamente"
+            ((TESTS_PASSED++))
+            # log_debug "🔍 DEBUG: run_schema.sh completado exitosamente, continuando a FASE 2"
+            # log_debug "🔍 DEBUG: setup_environment completado - run_schema.sh ejecutado"
+            return 0
         else
-            log_error "❌ Contenedor no está corriendo después de creación"
-            docker-compose -f "$COMPOSE_FILE" ps
-            exit 1
+            run_schema_result=$?
+            echo "$output"
+            # log_debug "🔍 DEBUG: run_schema.sh ejecutado, código de salida: $run_schema_result"
+            log_error "❌ Error en configuración del entorno"
+            ((TESTS_FAILED++))
+            # log_debug "🔍 DEBUG: run_schema.sh falló, saliendo con exit 1"
+            return 1
         fi
     else
-        log_error "❌ Error al crear contenedor"
-        log_info "📋 Verificando logs de Docker Compose..."
-        docker-compose -f "$COMPOSE_FILE" logs --tail=20
-        exit 1
+        log_info "🚀 FASE 1: Modo independiente - verificando conexión directamente"
+        # log_debug "🔍 DEBUG: Ejecutando verify_connection en modo independiente"
+        # Intentar verificar conexión directamente
+        if verify_connection; then
+            log_success "✅ Conexión verificada exitosamente"
+            ((TESTS_PASSED++))
+            # log_debug "🔍 DEBUG: verify_connection completado, continuando a FASE 2"
+            # log_debug "🔍 DEBUG: setup_environment completado - modo independiente"
+            return 0
+        else
+            log_error "❌ No se pudo establecer conexión a la base de datos"
+            ((TESTS_FAILED++))
+            # log_debug "🔍 DEBUG: verify_connection falló, saliendo con exit 1"
+            return 1
+        fi
     fi
-    
-    # Esperar a que PostgreSQL inicie
-    wait_for_postgres
 }
 
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
@@ -434,66 +474,7 @@ verify_connection() {
 }
 
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-# PASO 3: APLICAR MIGRACIONES
-# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-
-apply_migrations() {
-    log_info "📦 Aplicando migraciones con init_db.py..."
-    
-    # Verificar que el script init_db.py existe
-    if [[ ! -f "$PROJECT_DIR/scripts/init_db.py" ]]; then
-        log_error "❌ Script init_db.py no encontrado en: $PROJECT_DIR/scripts/"
-        exit 1
-    fi
-    
-    # Verificar y activar entorno virtual si existe
-    local venv_path="$PROJECT_DIR/.venv"
-    if [[ -d "$venv_path" ]]; then
-        log_info "🐍 Entorno virtual detectado, activando..."
-        if [[ -f "$venv_path/bin/activate" ]]; then
-            source "$venv_path/bin/activate"
-            log_success "✅ Entorno virtual activado"
-        elif [[ -f "$venv_path/bin/activate.fish" ]]; then
-            source "$venv_path/bin/activate.fish"
-            log_success "✅ Entorno virtual (fish) activado"
-        else
-            log_warning "⚠️ Entorno virtual encontrado pero no hay script de activación"
-        fi
-    else
-        log_info "ℹ️ No se encontró entorno virtual, usando Python global"
-    fi
-    
-    # Verificar dependencias de Python
-    log_test "🔍 Verificando dependencias de Python..."
-    if ! python3 -c "import psycopg2; print('psycopg2 disponible')" 2>/dev/null; then
-        log_error "❌ psycopg2 no está disponible. Instala con: pip install psycopg2-binary"
-        exit 1
-    fi
-    log_success "✅ Dependencias de Python verificadas"
-    
-    # Ejecutar script init_db.py con variables de entorno exportadas
-    log_test "▶️ Ejecutando scripts/init_db.py..."
-    
-    # Asegurar que las variables de entorno estén disponibles para el script Python
-    export DB_HOST="$DB_HOST"
-    export DB_PORT="$DB_PORT"
-    export DB_NAME="$DB_NAME"
-    export DB_USER="$DB_USER"
-    export DB_PASSWORD="$DB_PASSWORD"
-    
-    # Ejecutar el script Python desde el directorio del proyecto
-    cd "$PROJECT_DIR"
-    if python3 scripts/init_db.py; then
-        log_success "✅ Migraciones aplicadas exitosamente via init_db.py"
-        ((TESTS_PASSED++))
-    else
-        log_error "❌ Error al ejecutar scripts/init_db.py"
-        exit 1
-    fi
-}
-
-# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-# PASO 4: TESTS UNITARIOS DEL SCHEMA
+# PASO 3: TESTS UNITARIOS DEL SCHEMA
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 run_schema_tests() {
@@ -548,7 +529,7 @@ run_schema_tests() {
 }
 
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-# PASO 5: RESUMEN FINAL
+# PASO 4: RESUMEN FINAL
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 show_summary() {
@@ -589,16 +570,32 @@ show_summary() {
 
 main() {
     echo "============================================================================"
-    log_info "🚀 INICIANDO CICLO COMPLETO DE TESTS - MIGRATION CSV POSTGRES"
+    log_info " INICIANDO CICLO COMPLETO DE TESTS - MIGRATION CSV POSTGRES"
     echo "============================================================================"
     
-    # Ejecutar pasos en orden
-    check_prerequisites
+    # Cargar configuración primero (necesario para setup_environment)
     load_config
-    create_container
-    verify_connection
-    apply_migrations
+    
+    # FASE 1: Configurar entorno con bajo acoplamiento
+    # log_debug "🔍 DEBUG: Iniciando FASE 1 - Configuración de entorno"
+    if setup_environment; then
+        # log_debug "🔍 DEBUG: FASE 1 completada exitosamente"
+        true  # No-op for readability
+    else
+        log_error "❌ Error en FASE 1 - Configuración del entorno"
+        exit 1
+    fi
+    
+    # Punto de control antes de FASE 2
+    # log_debug "🔍 DEBUG: Antes de FASE 2 - TESTS_PASSED=$TESTS_PASSED, TESTS_FAILED=$TESTS_FAILED"
+    
+    # FASE 2: Ejecutar pruebas de schema
+    log_info "🚀 FASE 2: Ejecutando pruebas de schema..."
+    # log_debug "🔍 DEBUG: Llamando a run_schema_tests"
     run_schema_tests
+    # log_debug "🔍 DEBUG: run_schema_tests completado"
+    
+    # Mostrar resumen final
     show_summary
 }
 
