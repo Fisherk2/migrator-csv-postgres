@@ -1,0 +1,57 @@
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# ESQUEMA DE VALIDACIÓN: CUSTOMERS
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# Contrato de dominio para validación de clientes antes de inserción
+# Este archivo define reglas de negocio, independientes de implementación SQL
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+
+table: customers
+description: "Entidad principal de clientes del e-commerce con datos de contacto"
+version: "1.0.0"
+
+# Columnas del dominio con sus reglas de validación
+columns:
+  id:
+    type: integer
+    required: false
+    allowed_null: true
+    business_rule: "Identificador único autoincremental, generado por BD"
+    validation_message: "ID debe ser entero positivo o nulo para auto-generación"
+
+  name:
+    type: string
+    required: true
+    allowed_null: false
+    format: "non_empty_string"
+    business_rule: "Nombre completo requerido para facturación y comunicación"
+    validation_message: "Nombre es requerido y no puede estar vacío en fila {row}"
+
+  email:
+    type: email
+    required: true
+    allowed_null: false
+    format: "rfc5322_email"
+    business_rule: "Email único usado como login principal y comunicaciones"
+    validation_message: "Email inválido '{value}' en fila {row}. Se espera formato RFC5322"
+
+  phone:
+    type: phone
+    required: false
+    allowed_null: true
+    format: "e164_phone"
+    business_rule: "Teléfono opcional para contacto y soporte técnico"
+    validation_message: "Teléfono '{value}' inválido en fila {row}. Formato esperado: +[código][número]"
+
+  created_at:
+    type: datetime
+    required: false
+    allowed_null: true
+    business_rule: "Timestamp de registro automático generado por BD"
+    validation_message: "Fecha de creación debe ser datetime válido o nulo para auto-generación"
+
+  updated_at:
+    type: datetime
+    required: false
+    allowed_null: true
+    business_rule: "Timestamp de última modificación, actualizado automáticamente"
+    validation_message: "Fecha de actualización debe ser datetime válido o nulo para auto-generación"

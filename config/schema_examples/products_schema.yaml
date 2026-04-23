@@ -1,0 +1,57 @@
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# ESQUEMA DE VALIDACIÓN: PRODUCTS
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# Contrato de dominio para validación de productos antes de inserción
+# Define reglas de negocio independientes de implementación SQL
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+
+table: products
+description: "Catálogo de productos del e-commerce con inventario y precios"
+version: "1.0.0"
+
+# Columnas del dominio con sus reglas de validación
+columns:
+  id:
+    type: integer
+    required: false
+    allowed_null: true
+    business_rule: "Identificador único autoincremental, generado por BD"
+    validation_message: "ID debe ser entero positivo o nulo para auto-generación"
+
+  name:
+    type: string
+    required: true
+    allowed_null: false
+    format: "non_empty_string"
+    business_rule: "Nombre visible en catálogo y búsquedas, requerido para identificación"
+    validation_message: "Nombre de producto es requerido y no puede estar vacío en fila {row}"
+
+  description:
+    type: string
+    required: false
+    allowed_null: true
+    business_rule: "Descripción detallada para página de producto, opcional"
+    validation_message: "Descripción debe ser texto válido o nulo en fila {row}"
+
+  price:
+    type: float
+    required: true
+    allowed_null: false
+    format: "positive_number"
+    business_rule: "Precio unitario en moneda local, no puede ser negativo"
+    validation_message: "Precio '{value}' inválido en fila {row}. Se espera número positivo"
+
+  stock_quantity:
+    type: integer
+    required: true
+    allowed_null: false
+    format: "non_negative_integer"
+    business_rule: "Unidades disponibles para venta, no puede ser negativo"
+    validation_message: "Stock '{value}' inválido en fila {row}. Se espera entero no negativo"
+
+  is_active:
+    type: boolean
+    required: false
+    allowed_null: true
+    business_rule: "Producto visible/oculto en catálogo, default true"
+    validation_message: "Estado activo debe ser booleano (true/false) o nulo en fila {row}"

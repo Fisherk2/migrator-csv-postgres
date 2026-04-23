@@ -1,0 +1,50 @@
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# ESQUEMA DE VALIDACIÓN: ORDERS
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# Contrato de dominio para validación de órdenes antes de inserción
+# Define reglas de negocio independientes de implementación SQL
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+
+table: orders
+description: "Órdenes de compra del e-commerce con estado y montos"
+version: "1.0.0"
+
+# Columnas del dominio con sus reglas de validación
+columns:
+  id:
+    type: integer
+    required: false
+    allowed_null: true
+    business_rule: "Identificador único autoincremental, generado por BD"
+    validation_message: "ID debe ser entero positivo o nulo para auto-generación"
+
+  customer_id:
+    type: integer
+    required: true
+    allowed_null: false
+    format: "positive_integer"
+    business_rule: "Referencia al cliente que realizó la compra, debe existir en customers"
+    validation_message: "Customer ID '{value}' inválido en fila {row}. Se espera entero positivo"
+
+  order_date:
+    type: datetime
+    required: false
+    allowed_null: true
+    business_rule: "Fecha en que se realizó la orden, default fecha actual"
+    validation_message: "Fecha de orden '{value}' inválida en fila {row}. Se espera datetime válido"
+
+  total_amount:
+    type: float
+    required: true
+    allowed_null: false
+    format: "positive_number"
+    business_rule: "Monto total de la orden, no puede ser negativo"
+    validation_message: "Total '{value}' inválido en fila {row}. Se espera número positivo"
+
+  status:
+    type: string
+    required: true
+    allowed_null: false
+    format: "order_status"
+    business_rule: "Estado actual del proceso, valores válidos predefinidos"
+    validation_message: "Status '{value}' inválido en fila {row}. Se espera: pending, processing, shipped, delivered, cancelled"
