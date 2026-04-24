@@ -1,0 +1,12 @@
+# ▏▎▍▌▋▊▉▉▉▉▉▉▉▉ MAPEO DE ERRORES INTENCIONALES ▉▉▉▉▉▉▉▉▉▊▋▌▍▎▏
+# Fila 1: Email sin @ → email_validator.py → validate_email_format → "Falta el símbolo @"
+# Fila 2: Teléfono con caracteres inválidos → phone_validator.py → validate_phone_format → "Caracteres no numéricos detectados"
+# Fila 3: Nombre vacío (espacios) → validate_required → "Campo requerido vacío"
+# Fila 4: Tipo incorrecto (número en name) → validate_string → "Se esperaba string, se recibió integer"
+# Fila 5: Email con typo común → email_validator.py → validate_email_format + sugerencia → "¿Quisiste decir user@gmail.com?"
+id,name,email,phone,created_at,updated_at
+11,Pedro Sanchez,pedro.sanchez.example.com,+525512345678,2024-01-15 10:30:00,2024-01-15 10:30:00
+12,Sofia Ramirez,sofia.ramirez@example.com,ABC-DEF-GHI,2024-02-20 14:45:00,2024-02-20 14:45:00
+13,   ,miguel.angel@example.com,+525511223344,2024-03-10 09:15:00,2024-03-10 09:15:00
+14,12345,isabel.gomez@example.com,+525533445566,2024-03-25 16:20:00,2024-03-25 16:20:00
+15,Adriana Torres,adriana.torres@gmial.com,+525566778899,2024-04-05 11:00:00,2024-04-05 11:00:00

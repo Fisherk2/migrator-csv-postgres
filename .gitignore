@@ -18,6 +18,9 @@
 # AI - Excluye archivos de IA y agentes
 .agents/
 .windsurf/
+.claude/
+.continue/
+.kiro/
 
 # Sistema - Excluye archivos temporales del sistema operativo
 .DS_Store

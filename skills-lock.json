@@ -41,6 +41,11 @@
       "sourceType": "github",
       "computedHash": "dcace78e5cef7d8dce8ffef7ebee146e6c83a438aa4cf80bf502730e870c02d4"
     },
+    "pytest-coverage": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "06481f4bbc6d80a52091ec9ba5856eb1dc5f80cbabb40fd4ad02aaea3085a0dc"
+    },
     "pytest-patterns": {
       "source": "manutej/luxor-claude-marketplace",
       "sourceType": "github",
@@ -56,6 +61,11 @@
       "sourceType": "github",
       "computedHash": "f263ed30e7627f1f22aea99f0f098b73a9f3b5f1c9ea36d3a31a787eacf2e07e"
     },
+    "python-testing-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "computedHash": "69915bb276b6aec61fe5b283a933f96584f66d14b616ce2060d95757629c6866"
+    },
     "solid": {
       "source": "ramziddin/solid-skills",
       "sourceType": "github",
@@ -65,6 +75,11 @@
       "source": "obra/superpowers",
       "sourceType": "github",
       "computedHash": "72e9ab72627e4fd8ed26a582e82309a98ecdc4f6e1c99418430ac05682c9e91d"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "computedHash": "ad055544599481182d0079c4198e85da26677cb408a677be2da04915375f0427"
     }
   }
 }

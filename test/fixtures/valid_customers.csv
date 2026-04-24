@@ -1,0 +1,11 @@
+id,name,email,phone,created_at,updated_at
+1,Maria Garcia,maria.garcia@example.com,+525512345678,2024-01-15 10:30:00,2024-01-15 10:30:00
+2,Carlos Rodriguez,carlos.rodriguez@example.com,+525598765432,2024-02-20 14:45:00,2024-02-20 14:45:00
+3,Ana Martinez,ana.martinez@example.com,+525511223344,2024-03-10 09:15:00,2024-03-10 09:15:00
+4,Juan Lopez,juan.lopez@example.com,+525533445566,2024-03-25 16:20:00,2024-03-25 16:20:00
+5,Laura Hernandez,laura.hernandez@example.com,+525566778899,2024-04-05 11:00:00,2024-04-05 11:00:00
+6,Roberto Diaz,roberto.diaz@example.com,+525544556677,2024-04-12 13:30:00,2024-04-12 13:30:00
+7,Patricia Silva,patricia.silva@example.com,+525577889900,2024-04-18 08:45:00,2024-04-18 08:45:00
+8,Fernando Cruz,fernando.cruz@example.com,+525522334455,2024-04-20 15:10:00,2024-04-20 15:10:00
+9,Carmen Morales,carmen.morales@example.com,+525599887766,2024-04-22 10:00:00,2024-04-22 10:00:00
+10,Diego Reyes,diego.reyes@example.com,+525511002233,2024-04-23 12:00:00,2024-04-23 12:00:00
