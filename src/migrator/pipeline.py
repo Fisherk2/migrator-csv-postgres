@@ -9,7 +9,6 @@ DESCRIPCIÓN: Orquestador de migración con patrón Template Method.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -18,15 +17,6 @@ from src.migrator.db_connector import DBConnector
 from src.migrator.error_handler import ErrorHandler
 from src.migrator.report_generator import ReportGenerator
 from src.utils.logger import get_logger
-
-
-# ▏▎▍▌▋▊▉▉▉▉▉▉▉▉ Variables de entorno utilizadas ▉▉▉▉▉▉▉▉▉▊▋▌▍▎▏
-# Centralizar nombres de variables de entorno para mantenimiento y prevención de typos (Clean Code: DRY)
-ENV_DB_HOST = "DB_HOST"
-ENV_DB_PORT = "DB_PORT"
-ENV_DB_NAME = "DB_NAME"
-ENV_DB_USER = "DB_USER"
-ENV_DB_PASSWORD = "DB_PASSWORD"
 
 
 class MigrationPipeline:
@@ -167,31 +157,13 @@ class MigrationPipeline:
         """
         Establece conexión a base de datos.
         
-        DECISIÓN: La configuración se carga desde variables de entorno
-        al instanciar DBConnector. Esta función solo delega la conexión.
+        DECISIÓN: DBConnector ya fue configurado por la capa de presentación (CLI)
+        con las credenciales apropiadas. Esta función solo delega la conexión.
         """
 
-        # ■■■■■■■■■■■■■ La configuración ya se estableció en el constructor via variables de entorno ■■■■■■■■■■■■■
+        # ■■■■■■■■■■■■■ La configuración se inyectó desde el CLI al instanciar DBConnector ■■■■■■■■■■■■■
         self._db_connector.connect()
     
-    def _load_db_config_from_env(self) -> Dict[str, str]:
-        """
-        Carga configuración de BD desde variables de entorno.
-        
-        DECISIÓN: Usar constantes globales para nombres de variables
-        de entorno (DRY) y valores por defecto seguros.
-        
-        Returns:
-            Diccionario con claves esperadas por DBConnector:
-            - host, dbname, user, password, port (opcional)
-        """
-        return {
-            "host": os.getenv(ENV_DB_HOST, "localhost"),
-            "dbname": os.getenv(ENV_DB_NAME, "migrator_ecommerce"),
-            "user": os.getenv(ENV_DB_USER, "migrator_user"),
-            "password": os.getenv(ENV_DB_PASSWORD, ""),
-            "port": int(os.getenv(ENV_DB_PORT, "5432"))
-        }
     
     def _load_and_validate_csv(self) -> Dict:
         """
