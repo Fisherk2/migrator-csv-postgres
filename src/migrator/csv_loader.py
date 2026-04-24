@@ -40,10 +40,11 @@ class CSVLoader:
     def load_csv_to_temp_table(
         self,
         csv_path: str,
-        temp_table: str,
-        config: Dict[str, Any],
-        db_connector: DBConnector
-    ) -> int:
+        schema: Dict[str, Any],
+        validators: Dict[str, Any],
+        db_connector: DBConnector,
+        config: Optional[Dict[str, Any]] = None
+    ) -> str:
 
         """
         Carga CSV a tabla temporal con validación fila-a-fila.
@@ -53,17 +54,17 @@ class CSVLoader:
         
         Args:
             csv_path: Ruta al archivo CSV a procesar.
-            temp_table: Nombre de tabla temporal destino.
-            config: Configuración completa de carga incluyendo:
+            schema: Diccionario con definición de esquema de la tabla destino.
+            validators: Diccionario con reglas de validación por campo.
+            db_connector: Conector a base de datos ya inicializado.
+            config: Configuración opcional de carga incluyendo:
                 - source.encoding: Codificación del archivo (default: utf-8-sig)
                 - source.delimiter: Separador CSV (default: coma)
                 - validation.max_errors_before_rollback: Límite de errores para abortar
                 - validation.strict_mode: Si rechaza carga completa ante errores
-            db_connector: Conector a base de datos ya inicializado.
             
         Returns:
-            Número de filas cargadas exitosamente a tabla temporal.
-            Retorna 0 si se excede umbral de errores permitidos.
+            Nombre de la tabla temporal creada.
             
         Raises:
             FileNotFoundError: Si el archivo CSV no existe en la ruta especificada.
@@ -74,51 +75,55 @@ class CSVLoader:
         Example:
             >>> loader = CSVLoader()
             >>> db = DBConnector(config)
-            >>> rows = loader.load_csv_to_temp_table(
+            >>> schema = {"id": "INTEGER", "name": "VARCHAR(100)"}
+            >>> validators = {"email": {"type": "email"}}
+            >>> temp_table = loader.load_csv_to_temp_table(
             ...     csv_path="data/customers.csv",
-            ...     temp_table="temp_customers",
-            ...     config={
-            ...         "source": {"encoding": "utf-8-sig", "delimiter": ","},
-            ...         "validation": {"max_errors_before_rollback": 50}
-            ...     },
-            ...     db_connector=db
+            ...     schema=schema,
+            ...     validators=validators,
+            ...     db_connector=db,
+            ...     config={"source": {"encoding": "utf-8-sig"}}
             ... )
-            >>> print(f"Cargadas {rows} filas válidas")
+            >>> print(f"Tabla temporal: {temp_table}")
         """
 
         # ■■■■■■■■■■■■■ Validación de archivo y configuración ■■■■■■■■■■■■■
         self._validate_file_access(csv_path)
+        config = config or {}
         encoding = config.get("source", {}).get("encoding", "utf-8-sig")
         delimiter = config.get("source", {}).get("delimiter", ",")
         max_errors = config.get("validation", {}).get("max_errors_before_rollback", 100)
         strict_mode = config.get("validation", {}).get("strict_mode", False)
         
+        # ■■■■■■■■■■■■■ Generar nombre de tabla temporal único ■■■■■■■■■■■■■
+        temp_table = self._generate_temp_table_name(csv_path)
+        
         # ■■■■■■■■■■■■■ Crear tabla temporal con misma estructura que destino ■■■■■■■■■■■■■
         # Para evitar problemas de tipo durante la validación
-        self._create_temp_table(temp_table, config.get("schema", {}), db_connector)
+        self._create_temp_table(temp_table, schema, db_connector)
         
         try:
 
             # ■■■■■■■■■■■■■ Fase 1: Lectura y validación ■■■■■■■■■■■■■
             valid_rows, errors = self._read_and_validate_csv(
-                csv_path, config.get("schema", {}), 
-                config.get("validators", {}), encoding, delimiter, max_errors
+                csv_path, schema, validators, encoding, delimiter, max_errors
             )
             
             # ■■■■■■■■■■■■■ Fail-fast si excede umbral de errores ■■■■■■■■■■■■■
             if len(errors) >= max_errors:
                 self._logger.error(f"Abortando carga: {len(errors)} errores >= umbral {max_errors}")
                 self.rollback_temp_table(temp_table, db_connector)
-                return 0
+                return temp_table
             
             # ■■■■■■■■■■■■■ Fase 2: Ingestión con COPY optimizado ■■■■■■■■■■■■■
             if valid_rows:
-                return self._copy_rows_to_temp_table(
+                self._copy_rows_to_temp_table(
                     valid_rows, temp_table, delimiter, db_connector
                 )
             else:
                 self._logger.warning("No hay filas válidas para cargar")
-                return 0
+            
+            return temp_table
                 
         except Exception as e:
             self._logger.error(f"Error durante carga a tabla temporal: {e}")
@@ -251,6 +256,25 @@ class CSVLoader:
         
         if not os.access(csv_path, os.R_OK):
             raise PermissionError(f"Sin permisos de lectura: {csv_path}")
+    
+    def _generate_temp_table_name(self, csv_path: str) -> str:
+        """Genera nombre único para tabla temporal basado en el archivo CSV.
+        
+        DECISIÓN: Usar timestamp y nombre de archivo para evitar colisiones
+        en migraciones concurrentes sin hardcodear nombres.
+        
+        Args:
+            csv_path: Ruta al archivo CSV.
+            
+        Returns:
+            Nombre de tabla temporal único.
+        """
+        import time
+        from pathlib import Path
+        
+        csv_name = Path(csv_path).stem
+        timestamp = int(time.time())
+        return f"temp_{csv_name}_{timestamp}"
     
     def _create_temp_table(
         self, 
