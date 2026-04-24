@@ -1,0 +1,67 @@
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# Contrato de Validación para Customers
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+# Usar tipos de dominio (string, integer, email, phone) en lugar de tipos SQL
+# para desacoplar la validación del motor de base de datos (Clean Architecture).
+# 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙
+table_name: customers
+columns:
+  id:
+    type: integer
+    required: false
+    allowed_null: true
+    description: "Identificador único autoincremental"
+  
+  name:
+    type: string
+    required: true
+    allowed_null: false
+    min_length: 1
+    max_length: 100
+    format: "^[a-zA-ZáéíóúÁÉÍÓÚñÑ\\s]+$"
+    description: "Nombre completo del cliente (obligatorio)"
+  
+  email:
+    type: email
+    required: true
+    allowed_null: false
+    format: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    unique: true
+    description: "Email único para login y comunicaciones"
+  
+  phone:
+    type: phone
+    required: false
+    allowed_null: true
+    format: "^\\+[1-9]\\d{1,14}$"
+    description: "Teléfono opcional en formato E.164 simplificado"
+  
+  created_at:
+    type: string
+    required: false
+    allowed_null: true
+    format: "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+    description: "Timestamp de creación (YYYY-MM-DD HH:MM:SS)"
+  
+  updated_at:
+    type: string
+    required: false
+    allowed_null: true
+    format: "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"
+    description: "Timestamp de última modificación (YYYY-MM-DD HH:MM:SS)"
+
+validation_rules:
+  email:
+    check_mx: false
+    check_smtp: false
+    allow_disposable: true
+    allow_plus_signing: true
+  
+  phone:
+    country_code_required: true
+    allow_hyphens: false
+    allow_parentheses: false
+
+error_threshold:
+  max_errors: 5
+  halt_on_critical: true
