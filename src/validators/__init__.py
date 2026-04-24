@@ -23,13 +23,8 @@ from typing import Any, Dict
 
 # ■■■■■■■■■■■■■ Intentar importar desde el auditor externo con manejo de errores robusto ■■■■■■■■■■■■■
 try:
-    # ▲▲▲▲▲▲ Importar funciones de validación de tipos del auditor ▲▲▲▲▲▲
-    from extern.auditor.src.validators.type_validator import (
-        validate_integer,
-        validate_float,
-        validate_string,
-        validate_boolean,
-    )
+    # ▲▲▲▲▲▲ Importar clase TypeValidator del auditor ▲▲▲▲▲▲
+    from extern.auditor.src.validators.type_validator import TypeValidator
     
     # ▲▲▲▲▲▲ Importar funciones de validación de esquemas del auditor ▲▲▲▲▲▲
     from extern.auditor.src.validators.schema_validator import (
@@ -37,37 +32,76 @@ try:
         validate_schema_format,
     )
     
+    # ▲▲▲▲▲▲ Instancia singleton para wrappers ▲▲▲▲▲▲
+    _type_validator = TypeValidator()
+    
+    # ▲▲▲▲▲▲ Wrappers para exponer funciones en lugar de métodos ▲▲▲▲▲▲
+    def validate_integer(value: Any) -> tuple[bool, str]:
+        """Wrapper para validación de enteros usando TypeValidator del auditor."""
+        if value is None or value == "":
+            return False, "El valor es requerido"
+        is_valid = _type_validator.validate_type(value, "entero")
+        if is_valid:
+            return True, ""
+        return False, f"'{value}' no es un entero válido"
+    
+    def validate_float(value: Any) -> tuple[bool, str]:
+        """Wrapper para validación de flotantes usando TypeValidator del auditor."""
+        if value is None or value == "":
+            return False, "El valor es requerido"
+        is_valid = _type_validator.validate_type(value, "flotante")
+        if is_valid:
+            return True, ""
+        return False, f"'{value}' no es un flotante válido"
+    
+    def validate_string(value: Any) -> tuple[bool, str]:
+        """Wrapper para validación de strings usando TypeValidator del auditor."""
+        if value is None:
+            return False, "El valor es requerido"
+        if not isinstance(value, str):
+            return False, f"Se esperaba string, se recibió {type(value).__name__}"
+        if not value.strip():
+            return False, "El string no puede estar vacío"
+        # TypeValidator acepta cualquier valor como cadena, solo verificamos tipo y vacío aquí
+        return True, ""
+    
+    def validate_boolean(value: Any) -> tuple[bool, str]:
+        """Wrapper para validación de booleanos usando TypeValidator del auditor."""
+        if value is None or value == "":
+            return False, "El valor es requerido"
+        is_valid = _type_validator.validate_type(value, "booleano")
+        if is_valid:
+            return True, ""
+        return False, f"'{value}' no es un booleano válido"
+    
 except ImportError as e:
-    # ▲▲▲▲▲▲ Si el submodule no está inicializado, proporcionar mensaje claro ▲▲▲▲▲▲
+
+    # ■■■■■■■■■■■■■ Si el submodule no está inicializado, proporcionar mensaje claro ■■■■■■■■■■■■■
     raise ImportError(
         f"No se pudo importar desde extern.auditor. "
         f"Ejecuta: git submodule update --init --recursive\n"
         f"Error original: {e}"
     ) from e
 
-# ■■■■■■■■■■■■■ Espacio preparado para validadores custom futuros ■■■■■■■■■■■■■
-# TODO: Implementar validadores específicos del dominio cuando sea necesario
-# try:
-#     from .custom import (
-#         validate_email_format,
-#         validate_phone_number,
-#         validate_date_range,
-#     )
-# except ImportError:
-#     # Los validadores custom son opcionales
-#     pass
+# ▼△▼△△▼△▼△▼△▼△▼△▼△ Validadores custom específicos del dominio △▼△▼△▼△▼△▼△▼△▼△▼△▼
+from .custom.email_validator import validate_email_format
+from .custom.phone_validator import validate_phone_format
 
 # ▏▎▍▌▋▊▉▉▉▉▉▉▉▉ Exportación pública de la API del Facade ▉▉▉▉▉▉▉▉▉▊▋▌▍▎▏
 __all__ = [
-    # ▲▲▲▲▲▲ Validadores de tipos (re-exportados del auditor) ▲▲▲▲▲▲
+    # ▲▲▲▲▲▲ Validadores de tipos (wrappers usando TypeValidator del auditor) ▲▲▲▲▲▲
     "validate_integer",
     "validate_float", 
     "validate_string",
     "validate_boolean",
     
-    # ▲▲▲▲▲▲ Validadores de esquemas (re-exportados del auditor) ▲▲▲▲▲▲
+    # TODO: ▲▲▲▲▲▲ Validadores de esquemas (re-exportados del auditor) ▲▲▲▲▲▲
     "load_schema_from_yaml",
     "validate_schema_format",
+    
+    # ▲▲▲▲▲▲ Validadores custom específicos del dominio ▲▲▲▲▲▲
+    "validate_email_format",
+    "validate_phone_format",
 ]
 
 # ▁▂▃▄▅▆▇███████ Metadatos del módulo para debugging y versionado ███████▇▆▅▄▃▂▁
