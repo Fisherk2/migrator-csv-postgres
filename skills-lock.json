@@ -1,6 +1,16 @@
 {
   "version": 1,
   "skills": {
+    "agent-md-refactor": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "computedHash": "51c53259bba830ebad6741b2ab69d213d5a4d02835f7f27925a0e4e93515fc22"
+    },
+    "agentmd": {
+      "source": "mryll/skills",
+      "sourceType": "github",
+      "computedHash": "7e3b705735d0864b2a8122468210b61289c04c3ce5ca02b2adbb0f520daf688b"
+    },
     "clean-architecture": {
       "source": "pproenca/dot-skills",
       "sourceType": "github",
@@ -11,6 +21,16 @@
       "sourceType": "github",
       "computedHash": "74bf6ded4f61ddcb593e7a29beb96c284f888cbe0639ad6e23710447c36ff19a"
     },
+    "crafting-effective-readmes": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "computedHash": "c931a8c22160e8925400778fcb2266b5d1df762f3052edba65f72479f79f2d6c"
+    },
+    "create-readme": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "d0ece1b2164ce1376e4ab6e98d6ac079df3a2a94f5f02224362b6a1ce2516ae9"
+    },
     "debugging-strategies": {
       "source": "wshobson/agents",
       "sourceType": "github",
@@ -20,6 +40,16 @@
       "source": "ratacat/claude-skills",
       "sourceType": "github",
       "computedHash": "a8199678b6e436810a476ed3cc339be658ef07c40daf4b5d47024a3cf42a637a"
+    },
+    "documentation": {
+      "source": "anthropics/knowledge-work-plugins",
+      "sourceType": "github",
+      "computedHash": "c24a1672a7edad51225859d6549d9a61892f704a4527a65ce3cddd913ca04550"
+    },
+    "documentation-writer": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "ee53d65b163cd7eb953a930c95841cfe398cc2c0bd24c06508bbaa07c432be35"
     },
     "postgresql-best-practices": {
       "source": "mindrally/skills",

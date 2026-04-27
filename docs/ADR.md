@@ -1,237 +1,483 @@
-# Registro de Decisiones Arquitectónicas - Sistema de Datos
+# Registro de Decisiones Arquitectónicas - Migrador CSV → PostgreSQL
 
 ---
 metadata:
   tipo_documento: Architecture Decision Record
-  dominio: Ingeniería de Datos
+  dominio: Migración de Datos
   estado: Aprobado
-  fecha_creacion: 2026-03-13
-  fecha_actualizacion: 2026-03-13
-  autor: fisherk2, Arquitecto de Base de Datos
-  revisores: [Equipo de Desarrollo, Equipo de DevOps]
-  stakeholders: [Desarrolladores, DBAs, Equipo de Producto]
-  tags: [adr, arquitectura, datos, decision, documentación]
-  version: 1.0
-  relacionado_con: [[create_database.sql]], [[migrations]], [[seeds]]
+  fecha_creacion: 2026-04-27
+  fecha_actualizacion: 2026-04-27
+  autor: fisherk2, Arquitecto de Software
+  revisores: [Equipo de Desarrollo]
+  stakeholders: [Desarrolladores, Arquitectos]
+  tags: [adr, arquitectura, clean-architecture, git-submodule, patrones]
+  version: 2.0
+  relacionado_con: [[REUSE_STRATEGY.md]], [[AGENT.MD]]
 ---
 
 ## Introducción
 
-Este documento registra las decisiones arquitectónicas clave tomadas durante el diseño e implementación del sistema de datos del proyecto. Cada decisión está documentada siguiendo el formato estándar ADR (Architecture Decision Record) para asegurar trazabilidad, consistencia y facilitar la toma de decisiones futuras.
+Este documento registra las decisiones arquitectónicas clave del Migrador CSV → PostgreSQL. Cada decisión captura el "por qué" detrás del "qué", siguiendo principios de *Clean Architecture* (Cap. 30: "The Database is a Detail", Cap. 10: "Configuration") y *Software Development, Design, and Coding* (Cap. 20).
 
-**Propósito del documento:**
-- Mantener un registro histórico de decisiones arquitectónicas
-- Proporcionar contexto a nuevos miembros del equipo
-- Facilitar la evaluación de decisiones existentes
-- Evitar redescubrimiento de alternativas ya evaluadas
+**Propósito:**
+- Mantener registro histórico de decisiones arquitectónicas
+- Prevenir el "Morning After Syndrome" (decisiones sin contexto)
+- Facilitar auditoría técnica futura
+- Evitar redescubrimiento de alternativas evaluadas
 
 **Cómo usar este documento:**
-1. Para nuevas decisiones: Copiar el formato ADR y completar cada sección
-2. Para decisiones existentes: Revisar el contexto antes de proponer cambios
+1. Para nuevas decisiones: Copiar formato ADR y completar cada sección
+2. Para decisiones existentes: Revisar contexto antes de proponer cambios
 3. Para auditorías: Usar como referencia de decisiones pasadas
 
 ---
 
 ## Tabla de Contenidos
-- [ADR-DAT-001: Selección de PostgreSQL como Base de Datos Principal](#adr-dat-001-selección-de-postgresql-como-base-de-datos-principal)
-- [ADR-DAT-002: Convención de Nomenclatura Snake Case](#adr-dat-002-convención-de-nomenclatura-snake-case)
-- [ADR-DAT-003: Estrategia de Soft Delete](#adr-dat-003-estrategia-de-soft-delete)
+- [ADR-MIG-001: Clean Architecture sobre MVC/Monolito](#adr-mig-001-clean-architecture-sobre-mvcmonolito)
+- [ADR-MIG-002: Git Submodule vs Pip Package vs Vendor](#adr-mig-002-git-submodule-vs-pip-package-vs-vendor)
+- [ADR-MIG-003: Repository + Template Method para Pipeline](#adr-mig-003-repository--template-method-para-pipeline)
+- [ADR-MIG-004: Separación YAML (Dominio) vs SQL (Infraestructura)](#adr-mig-004-separación-yaml-dominio-vs-sql-infraestructura)
+- [ADR-MIG-005: psycopg2 + copy_expert sobre SQLAlchemy/pandas](#adr-mig-005-psycopg2--copy_expert-sobre-sqlalchemypandas)
+- [Resumen de ADRs](#resumen-de-adrs)
 - [Historial de Cambios](#historial-de-cambios)
 
 ---
 
-# ADR-DAT-001: Selección de PostgreSQL como Base de Datos Principal
+# ADR-MIG-001: Clean Architecture sobre MVC/Monolito
 
 ## Estado y Contexto
 
-**Estado:** Aprobado  
-**Fecha:** 2026-03-13  
+**Estado:** Aceptado  
+**Fecha:** 2026-04-27  
 **Autor:** fisherk2
 
 **Contexto del Problema:**
-El proyecto requiere un sistema de gestión de datos que soporte transacciones ACID, relaciones complejas entre usuarios y proyectos, y escalabilidad para crecimiento futuro. Se necesita una base de datos relacional robusta con buen soporte para JSON, timestamps con zona horaria, y migraciones estructuradas.
+El proyecto requiere una arquitectura que soporte cambios en la base de datos sin afectar el dominio de negocio, permita testing de componentes aislados, y facilite la integración con el auditor externo. MVC tradicional acopla lógica de negocio con infraestructura.
 
 **Requisitos:**
-- Transacciones ACID completas
-- Soporte para foreign keys y constraints complejas
-- Migraciones estructuradas controladas
-- Timestamps con zona horaria
-- JSON para datos flexibles futuros
-- Código abierto con comunidad activa
+- Independencia de la base de datos (PostgreSQL es un detalle)
+- Testing de componentes aislados sin BD real
+- Integración controlada con dependencias externas
+- Extensibilidad sin modificar código existente
 
 **Restricciones:**
-- Presupuesto limitado (sin licencias comerciales)
-- Expertise del equipo en SQL tradicional
-- Requerimiento de deployment local y cloud
+- MVP con timeline limitado (40-60h)
+- Equipo familiarizado con MVC tradicional
+- Necesidad de rápida iteración
 
 ---
 
 ## Decisión Arquitectónica
 
-**Decisión:** Se selecciona **PostgreSQL 15+** como sistema principal de almacenamiento transaccional para el proyecto.
+**Decisión:** Se adopta **Clean Architecture (Lite)** con separación estricta de capas: Presentation → Application → Domain ← Infrastructure.
 
 **Justificación:**
-PostgreSQL ofrece el mejor balance entre madurez, características enterprise y costo cero. Su soporte nativo para JSON, timestamps con zona horaria, y migraciones controladas lo hacen ideal para nuestro caso de uso.
+Según *Clean Architecture* Cap. 30, "The Database is a Detail". La base de datos es un detalle de implementación, no el centro del sistema. Clean Architecture permite cambiar el motor de BD sin tocar el dominio.
 
-**Componentes seleccionados:**
-- PostgreSQL 15+ (motor principal)
-- psql (cliente CLI)
-- pgAdmin (herramienta de gestión)
-- pg_dump/pg_restore (backup/restore)
+**Estructura de Capas:**
+```
+Presentation Layer (CLI)
+    ↓
+Application Layer (Pipeline, CSVLoader, ReportGenerator)
+    ↓
+Domain Layer (Validators, Schema Definitions)
+    ↑
+Infrastructure Layer (DBConnector, Logger, FileSystem)
+```
+
+**Principios Aplicados:**
+- **DIP (Dependency Inversion):** High-level modules dependen de abstracciones
+- **OCP (Open/Closed):** Extensible sin modificación (Strategy pattern)
+- **SRP (Single Responsibility):** Cada clase tiene una razón para cambiar
 
 ---
 
 ## Alternativas Consideradas
 
-| Alternativa | Costo | Madurez | Expertise Equipo | Veredicto | Razón de Rechazo |
-|-------------|-------|---------|------------------|-----------|------------------|
-| **PostgreSQL 15+** | Gratis | Alta | Alta | ✅ Seleccionada | Mejor balance general |
-| MySQL 8.0 | Gratis | Alta | Media | ❌ Rechazada | JSON menos robusto |
-| SQLite | Gratis | Media | Alta | ❌ Rechazada | No soporta concurrencia |
-| SQL Server | $$ | Alta | Baja | ❌ Rechazada | Costo de licencias |
+| Alternativa | Acoplamiento BD | Testing | Extensibilidad | Veredicto | Razón de Rechazo |
+|-------------|----------------|---------|----------------|-----------|------------------|
+| **Clean Architecture** | Bajo | Excelente | Alta | ✅ Seleccionada | Independencia máxima |
+| MVC Tradicional | Alto | Medio | Media | ❌ Rechazada | Acoplamiento fuerte |
+| Monolito Simple | Alto | Bajo | Baja | ❌ Rechazada | Difícil de mantener |
+| Hexagonal | Bajo | Excelente | Alta | ❌ Rechazada | Overhead para MVP |
 
 ---
 
 ## Consecuencias y Trade-offs
 
 ### Beneficios
-- **Costo cero:** Sin licencias ni restricciones
-- **Características enterprise:** ACID completo, JSON avanzado
-- **Comunidad activa:** Amplia documentación y soporte
-- **Portabilidad:** Disponible en todas las plataformas
+- **Independencia:** Cambiar BD (PostgreSQL → MySQL) sin tocar dominio
+- **Testing:** Unit tests sin dependencias externas
+- **Extensibilidad:** Agregar validadores sin modificar pipeline
+- **Mantenibilidad:** Cambios localizados a capas específicas
 
 ### Trade-offs
-- **Complejidad operativa:** Requiere más configuración que NoSQL
-- **Escalabilidad vertical:** Limitada a un solo servidor por instancia
-- **Learning curve:** Más complejo que soluciones simples
+- **Complejidad inicial:** Curva de aprendizaje para equipo MVC
+- **Overhead:** Más archivos y abstracciones que monolito
+- **Boilerplate:** Interfaces y adaptadores adicionales
+<!-- CONSIDERACIÓN: Para MVP, podría parecer overengineering, pero ahorra deuda técnica a largo plazo -->
 
 ---
 
-# ADR-DAT-002: Convención de Nomenclatura Snake Case
+# ADR-MIG-002: Git Submodule vs Pip Package vs Vendor
 
 ## Estado y Contexto
 
-**Estado:** Aprobado  
-**Fecha:** 2026-03-13  
+**Estado:** Aceptado  
+**Fecha:** 2026-04-27  
 **Autor:** fisherk2
 
 **Contexto del Problema:**
-El equipo necesita una convención de nomenclatura consistente para tablas, columnas, y otros objetos de base de datos. Sin estándares claros, el código se vuelve difícil de mantener y leer. Se busca un balance entre legibilidad y consistencia.
+El proyecto necesita reutilizar validadores del proyecto `auditor-de-calidad-de-datos`. Se requiere control sobre versiones, capacidad de contribuir upstream, y aislamiento de cambios sin permisos de escritura en el repo original.
 
 **Requisitos:**
-- Nombres legibles y descriptivos
-- Consistencia entre base de datos y código
-- Facilidad de escritura y lectura
-- Compatibilidad con herramientas ORM
+- Control explícito de versiones del auditor
+- Capacidad de contribuir cambios upstream (fork → PR)
+- Aislamiento: cambios en migrador no afectan auditor
+- Read-only para este repo (sin permisos de escritura)
 
 **Restricciones:**
-- PostgreSQL es case-insensitive por defecto
-- Herramientas de generación de código prefieren ciertos formatos
-- Equipo familiarizado con diferentes convenciones
+- No tenemos permisos de escritura en el repo del auditor
+- Necesitamos rastrear qué versión del auditor usamos
+- El auditor evoluciona independientemente
 
 ---
 
 ## Decisión Arquitectónica
 
-**Decisión:** Se adopta **snake_case** como convención estándar para todos los objetos de base de datos.
-
-**Reglas específicas:**
-- Tablas en plural: `users`, `projects`
-- Columnas en singular: `username`, `email`
-- Primary keys siempre `id`
-- Foreign keys formato `tabla_id`: `user_id`
-- Timestamps con sufijo `_at`: `created_at`
+**Decisión:** Se usa **git submodule** en `extern/auditor/` con patrón Facade en `src/validators/__init__.py`.
 
 **Justificación:**
-Snake_case es legible, ampliamente soportado por PostgreSQL y herramientas ORM, y mantiene consistencia con convenciones de Python y Ruby.
-
----
-
-## Alternativas Consideradas
-
-| Alternativa | Legibilidad | Herramientas | Consistencia | Veredicto | Razón de Rechazo |
-|-------------|-------------|--------------|--------------|-----------|------------------|
-| **snake_case** | Alta | Excelente | Alta | ✅ Seleccionada | Balance óptimo |
-| camelCase | Media | Media | Media | ❌ Rechazada | PostgreSQL case-insensitive |
-| PascalCase | Baja | Baja | Baja | ❌ Rechazada | Difícil de leer |
-| kebab-case | Media | Baja | Media | ❌ Rechazada | Requiere quotes |
-
----
-
-## Consecuencias y Trade-offs
-
-### Beneficios
-- **Legibilidad:** Fácil de leer y entender
-- **Consistencia:** Ampliamente soportado por herramientas
-- **Estándar:** Usado por muchos frameworks populares
-
-### Trade-offs
-- **Verbosidad:** Nombres más largos que camelCase
-- **Migración:** Requiere conversión desde otros formatos
-
----
-
-# ADR-DAT-003: Estrategia de Soft Delete
-
-## Estado y Contexto
-
-**Estado:** Aprobado  
-**Fecha:** 2026-03-13  
-**Autor:** fisherk2
-
-**Contexto del Problema:**
-El sistema necesita manejar eliminación de usuarios y proyectos sin perder historial ni romper integridad referencial. DELETE físico elimina datos permanentemente y puede causar problemas de auditoría y recuperación.
-
-**Requisitos:**
-- Preservar historial de datos
-- Permitir recuperación de eliminaciones accidentales
-- Mantener integridad referencial
-- Soportar auditoría y compliance
-
-**Restricciones:**
-- Las consultas deben filtrar registros eliminados
-- El storage adicional debe ser mínimo
-- El rendimiento no debe verse afectado significativamente
-
----
-
-## Decisión Arquitectónica
-
-**Decisión:** Se implementa **soft delete** mediante campo booleano `is_active` en todas las tablas principales.
+Git submodule permite versionado explícito (commit SHA), contribución upstream controlada, y aislamiento completo. El Facade (`src/validators/__init__.py`) aplica DIP: el dominio depende de la abstracción, no del detalle del auditor.
 
 **Implementación:**
-- Campo `is_active BOOLEAN DEFAULT true`
-- Índices parciales para rendimiento
-- Queries automáticas con filtro `WHERE is_active = true`
-- Procedimientos de cleanup manual para datos antiguos
+```python
+# src/validators/__init__.py (Facade)
+from extern.auditor.src.validators.type_validator import TypeValidator
 
-**Justificación:**
-Soft delete preserva datos para auditoría, permite recuperación accidental, y mantiene integridad referencial sin complejidad adicional.
+def validate_integer(value: Any) -> tuple[bool, str]:
+    """Wrapper que aísla cambios internos del auditor."""
+    # Lógica de adaptación aquí
+```
+
+**Workflow de Submodule:**
+```bash
+# Inicializar
+git submodule update --init --recursive
+
+# Actualizar a versión específica
+cd extern/auditor
+git checkout <commit-sha>
+cd ../..
+git add extern/auditor
+git commit -m "Pin auditor to commit <sha>"
+
+# Contribuir upstream (si tenemos permisos)
+cd extern/auditor
+git checkout -b feature/new-validator
+# ... hacer cambios ...
+git push origin feature/new-validator
+# Crear PR en repo del auditor
+```
 
 ---
 
 ## Alternativas Consideradas
 
-| Alternativa | Storage | Complejidad | Rendimiento | Veredicto | Razón de Rechazo |
-|-------------|---------|-------------|-------------|-----------|------------------|
-| **Soft Delete** | Medio | Baja | Alto | ✅ Seleccionada | Balance óptimo |
-| DELETE Físico | Mínimo | Mínima | Excelente | ❌ Rechazada | Pérdida de datos |
-| Tabla de Auditoría | Alto | Alta | Medio | ❌ Rechazada | Complejidad alta |
-| Archivo Histórico | Variable | Alta | Medio | ❌ Rechazada | Complejo de gestionar |
+| Alternativa | Versionado | Contribución | Aislamiento | Veredicto | Razón de Rechazo |
+|-------------|------------|-------------|-------------|-----------|------------------|
+| **Git Submodule** | Commit SHA | Fork → PR | Completo | ✅ Seleccionada | Control máximo |
+| Pip Package | SemVer | Directa | Medio | ❌ Rechazada | No tenemos permisos |
+| vendor/ | Manual | Difícil | Completo | ❌ Rechazada | Duplicación de código |
+| Copy-Paste | Ninguno | Ninguna | Completo | ❌ Rechazada | Sin rastreo de cambios |
 
 ---
 
 ## Consecuencias y Trade-offs
 
 ### Beneficios
-- **Recuperación:** Datos pueden ser restaurados
-- **Auditoría:** Historial completo preservado
-- **Integridad:** No rompe foreign keys
+- **Versionado explícito:** Commit SHA garantiza reproducibilidad
+- **Contribución controlada:** Fork → PR sin acceso directo
+- **Aislamiento:** Cambios en migrador no afectan auditor
+- **Transparencia:** Git rastrea qué versión usamos
 
 ### Trade-offs
-- **Storage:** Mayor uso de espacio en disco
-- **Queries:** Requiere filtros adicionales
-- **Complejidad:** Lógica de negocio más compleja
+- **Complejidad git:** Comandos adicionales para desarrolladores
+- **Detached HEAD:** Submodule en estado detached por defecto
+- **Setup inicial:** Requiere `git submodule update --init`
+- **Sync manual:** Actualizar versión requiere pasos explícitos
+<!-- CONSIDERACIÓN: Equipo nuevo puede confundirse con detached HEAD, pero script `update_submodule.sh` mitiga esto -->
+
+---
+
+# ADR-MIG-003: Repository + Template Method para Pipeline
+
+## Estado y Contexto
+
+**Estado:** Aceptado  
+**Fecha:** 2026-04-27  
+**Autor:** fisherk2
+
+**Contexto del Problema:**
+El pipeline de migración requiere orquestación de pasos (load → validate → transfer → report) con rollback automático ante errores. Se necesita testing por etapa y extensibilidad para agregar nuevos pasos sin modificar el flujo principal.
+
+**Requisitos:**
+- Orquestación de flujo estándar con rollback transaccional
+- Testing de cada etapa independientemente
+- Extensibilidad para agregar pasos (ej: data transformation)
+- Rollback automático ante umbrales de error
+
+**Restricciones:**
+- MVP con funcionalidad básica primero
+- Necesidad de logging estructurado por etapa
+- Transacciones atómicas obligatorias
+
+---
+
+## Decisión Arquitectónica
+
+**Decisión:** Se aplica **Template Method** en `MigrationPipeline.execute()` y **Repository** en `DBConnector`.
+
+**Justificación:**
+Template Method (GoF) define el esqueleto del algoritmo, permitiendo que subclases redefinan ciertos pasos sin cambiar la estructura. Repository abstrae operaciones de BD, facilitando testing y cambio de motor.
+
+**Implementación:**
+```python
+# Template Method
+class MigrationPipeline:
+    def execute(self, config: Dict) -> Dict:
+        self._load_config(config)      # Paso 1
+        self._establish_connection()  # Paso 2
+        self._load_and_validate()      # Paso 3 (abstract)
+        self._transfer_or_rollback()   # Paso 4 (abstract)
+        self._generate_report()        # Paso 5
+        return self._stats
+
+# Repository
+class DBConnector:
+    def ensure_table_exists(self, table: str, schema: Dict) -> bool:
+        """Abstracción sobre psycopg2."""
+        pass
+```
+
+**Principios Aplicados:**
+- **Template Method:** Flujo estándar, pasos variables
+- **Repository:** Abstracción sobre operaciones BD
+- **SRP:** Pipeline orquesta, DBConnector opera BD
+
+---
+
+## Alternativas Consideradas
+
+| Alternativa | Testing | Extensibilidad | Rollback | Veredicto | Razón de Rechazo |
+|-------------|---------|----------------|----------|-----------|------------------|
+| **Template + Repository** | Excelente | Alta | Automático | ✅ Seleccionada | Balance óptimo |
+| Script Lineal | Bajo | Baja | Manual | ❌ Rechazada | Difícil de testear |
+| Chain of Responsibility | Medio | Alta | Manual | ❌ Rechazada | Complejidad alta |
+| State Machine | Medio | Alta | Manual | ❌ Rechazada | Overhead para MVP |
+
+---
+
+## Consecuencias y Trade-offs
+
+### Beneficios
+- **Testing por etapa:** Cada paso testable independientemente
+- **Extensibilidad:** Agregar pasos sin modificar flujo principal
+- **Rollback automático:** Transacción atómica en DBConnector
+- **Clarity:** Flujo visible en un método (`execute()`)
+
+### Trade-offs
+- **Rigidez:** Cambiar orden de pasos requiere modificación
+- **Overhead:** Clases adicionales (Repository)
+- **Learning curve:** Equipo debe entender patrones GoF
+<!-- CONSIDERACIÓN: Para MVP, podría parecer overengineering, pero facilita agregar data transformation en Fase 2 -->
+
+---
+
+# ADR-MIG-004: Separación YAML (Dominio) vs SQL (Infraestructura)
+
+## Estado y Contexto
+
+**Estado:** Aceptado  
+**Fecha:** 2026-04-27  
+**Autor:** fisherk2
+
+**Contexto del Problema:**
+El proyecto necesita definir esquemas de datos (tipos, validaciones) y estructura física de BD (tablas, índices). Mezclar ambos conceptos viola Clean Architecture: el dominio no debe conocer detalles de infraestructura.
+
+**Requisitos:**
+- Definición de esquemas en lenguaje de dominio (YAML)
+- Scripts SQL para estructura física (DDL)
+- Independencia: cambiar YAML no afecta SQL y viceversa
+- Validación de esquemas sin conexión a BD
+
+**Restricciones:**
+- MVP con 3 tablas (customers, products, orders)
+- Necesidad de validación declarativa
+- Scripts SQL idempotentes
+
+---
+
+## Decisión Arquitectónica
+
+**Decisión:** Se separa **esquema YAML (dominio)** en `config/schema_examples/` y **scripts SQL (infraestructura)** en `scripts/sql/`.
+
+**Justificación:**
+Según *Clean Architecture* Cap. 10, "Configuration", la configuración debe estar separada de la lógica. YAML define contratos de dominio (tipos, validaciones), SQL define detalles de implementación (tablas, índices).
+
+**Implementación:**
+```yaml
+# config/schema_examples/customers_schema.yaml (Dominio)
+table: customers
+columns:
+  email:
+    type: string
+    required: true
+    validation: email_format
+```
+
+```sql
+-- scripts/sql/02_create_schema.sql (Infraestructura)
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    -- ... índices, constraints
+);
+```
+
+**Principios Aplicados:**
+- **Separation of Concerns:** Dominio vs Infraestructura
+- **Configuration as Code:** YAML versionado
+- **Idempotency:** Scripts SQL re-ejecutables
+
+---
+
+## Alternativas Consideradas
+
+| Alternativa | Validación | Independencia | Mantenibilidad | Veredicto | Razón de Rechazo |
+|-------------|------------|----------------|----------------|-----------|------------------|
+| **YAML + SQL separados** | Declarativa | Alta | Alta | ✅ Seleccionada | Clean Architecture |
+| Solo SQL | Imperativa | Baja | Media | ❌ Rechazada | Acopla dominio a BD |
+| ORM (Python) | Programática | Media | Media | ❌ Rechazada | Overhead para MVP |
+| JSON Schema | Declarativa | Alta | Alta | ❌ Rechazada | YAML más legible |
+
+---
+
+## Consecuencias y Trade-offs
+
+### Beneficios
+- **Independencia:** Cambiar estructura BD sin afectar validaciones
+- **Validación offline:** Validar esquemas sin conexión a BD
+- **Legibilidad:** YAML más legible que DDL para no-DBAs
+- **Versionado:** Ambos archivos versionados en git
+
+### Trade-offs
+- **Duplicación:** Esquema definido en YAML y SQL
+- **Sync manual:** Cambios en uno requieren actualización del otro
+- **Complejidad:** Dos sistemas de definición que mantener
+<!-- CONSIDERACIÓN: Herramienta de generación SQL desde YAML podría mitigar duplicación en Fase 2 -->
+
+---
+
+# ADR-MIG-005: psycopg2 + copy_expert sobre SQLAlchemy/pandas
+
+## Estado y Contexto
+
+**Estado:** Aceptado  
+**Fecha:** 2026-04-27  
+**Autor:** fisherk2
+
+**Contexto del Problema:**
+El MVP requiere ingesta eficiente de CSV a PostgreSQL (<5 min para 1000 filas). Se necesita balance entre rendimiento, simplicidad, y dependencias. Pandas es popular pero agrega overhead innecesario para CSV simple.
+
+**Requisitos:**
+- Ingesta eficiente vía `COPY FROM` de PostgreSQL
+- Mínimas dependencias externas
+- Control transaccional explícito
+- Performance sin sacrificio de claridad
+
+**Restricciones:**
+- MVP con timeline limitado
+- Equipo familiarizado con Python stdlib
+- Requisito de 100% dependencias open-source
+
+---
+
+## Decisión Arquitectónica
+
+**Decisión:** Se usa **psycopg2-binary + copy_expert** directamente, sin ORM ni pandas.
+
+**Justificación:**
+`copy_expert` de psycopg2 es el método más eficiente para CSV → PostgreSQL (usa protocolo binario de PostgreSQL). Pandas agrega overhead innecesario para CSV simple. SQLAlchemy es excesivo para MVP sin necesidad de ORM.
+
+**Implementación:**
+```python
+# src/migrator/db_connector.py
+import psycopg2
+from io import StringIO
+
+def execute_copy_from(self, csv_path: str, temp_table: str) -> int:
+    """Usa COPY FROM nativo de PostgreSQL."""
+    with open(csv_path, 'r') as f:
+        cursor.copy_expert(f"COPY {temp_table} FROM STDIN WITH CSV HEADER", f)
+    return cursor.rowcount
+```
+
+**Principios Aplicados:**
+- **KISS (Keep It Simple, Stupid):** Herramienta mínima para el trabajo
+- **Performance:** Uso de protocolo nativo de PostgreSQL
+- **Fail-Fast:** Errores visibles inmediatamente
+
+---
+
+## Alternativas Consideradas
+
+| Alternativa | Performance | Dependencias | Simplicidad | Veredicto | Razón de Rechazo |
+|-------------|-------------|--------------|-------------|-----------|------------------|
+| **psycopg2 + copy_expert** | Excelente | Mínimas | Alta | ✅ Seleccionada | Balance óptimo |
+| pandas + to_sql | Medio | Alta | Alta | ❌ Rechazada | Overhead innecesario |
+| SQLAlchemy ORM | Medio | Alta | Media | ❌ Rechazada | Excesivo para MVP |
+| csv stdlib + INSERT | Bajo | Mínimas | Alta | ❌ Rechazada | Performance pobre |
+
+---
+
+## Consecuencias y Trade-offs
+
+### Beneficios
+- **Performance:** `COPY FROM` es 10-100x más rápido que INSERT
+- **Dependencias mínimas:** Solo psycopg2 (ya requerido)
+- **Control explícito:** Transacciones y rollback visibles
+- **Simplicidad:** Código directo sin abstracciones ORM
+
+### Trade-offs
+- **Sin ORM:** Queries SQL manuales (pero simples para MVP)
+- **Sin pandas:** Sin funcionalidades de data manipulation (no necesarias)
+- **PostgreSQL-specific:** `COPY FROM` no portable a otros motores
+<!-- CONSIDERACIÓN: Si MVP requiere multi-DB en Fase 2, considerar wrapper sobre COPY FROM -->
+
+---
+
+# Resumen de ADRs
+
+| ADR # | Principio Aplicado | Alternativa Descartada | Impacto en MVP |
+|-------|-------------------|------------------------|----------------|
+| ADR-MIG-001 | DIP, OCP, SRP | MVC Tradicional | +Complejidad inicial, -Deuda técnica |
+| ADR-MIG-002 | DIP, Facade | Pip Package | +Control versionado, -Complejidad git |
+| ADR-MIG-003 | Template Method, Repository | Script Lineal | +Testing por etapa, -Rigidez |
+| ADR-MIG-004 | Separation of Concerns | Solo SQL | +Independencia, -Duplicación |
+| ADR-MIG-005 | KISS, Performance | pandas + to_sql | +Performance, -Sin ORM |
+
+---
+
+## Prevención del "Morning After Syndrome"
+
+Los ADRs y la estrategia de reuso previenen el "Morning After Syndrome" (decisiones sin contexto que generan deuda técnica) mediante:
+
+1. **Captura explícita de trade-offs:** Cada ADR documenta consecuencias negativas, no solo beneficios
+2. **Vinculación a principios SOLID:** Cada decisión se justifica con principios arquitectónicos
+3. **Workflow de git submodule documentado:** Evita confusiones con detached HEAD y versioning
+4. **Separación dominio/infraestructura:** Cambios futuros en BD no rompen validaciones
+5. **Auditoría técnica facilitada:** ADRs proporcionan contexto para decisiones pasadas
 
 ---
 
@@ -239,7 +485,8 @@ Soft delete preserva datos para auditoría, permite recuperación accidental, y 
 
 | Versión | Fecha | Cambios | Autor | Estado |
 |---------|-------|---------|-------|---------|
-| 1.0 | 2026-03-13 | Creación inicial con 3 ADRs | fisherk2 | Activo |
+| 1.0 | 2026-03-13 | Creación inicial con 3 ADRs de BD | fisherk2 | Reemplazado |
+| 2.0 | 2026-04-27 | 5 ADRs de arquitectura del migrador | fisherk2 | Activo |
 
 ---
 
@@ -248,10 +495,10 @@ Soft delete preserva datos para auditoría, permite recuperación accidental, y 
 **Propietario:** fisherk2  
 **Frecuencia de revisión:** Trimestral  
 **Proceso de cambios:**
-1. Proponer nuevo ADR o modificación
+1. Proponer nuevo ADR o modificación en issue
 2. Revisión por equipo técnico
 3. Aprobación por arquitecto principal
-4. Actualización del documento
+4. Actualización del documento con trade-offs explícitos
 
 ---
 

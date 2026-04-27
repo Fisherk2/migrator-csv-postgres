@@ -1,11 +1,340 @@
-# Plantilla de Proyecto - Sistema de Datos PostgreSQL
+# Migrador CSV → PostgreSQL
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)
-![Shell](https://img.shields.io/badge/Shell-Bash-4EAA25.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
 
-> 🚀 **Template completo para proyectos de base de datos PostgreSQL** con migraciones, seeds, documentación y validación automatizada.
+> 🚀 **Migrador de datos CSV a PostgreSQL** con validación reutilizable, transacciones atómicas y reporting estructurado.
+
+---
+
+## 📋 Tabla de Contenidos
+
+- [Propósito](#propósito)
+- [Instalación](#instalación)
+- [Uso Rápido](#uso-rápido)
+- [Arquitectura](#arquitectura)
+- [Estructura del Proyecto](#estructura-del-proyecto)
+- [Comandos CLI](#comandos-cli)
+- [Testing](#testing)
+- [Documentación](#documentación)
+- [Contribución](#contribución)
+
+---
+
+## 🎯 Propósito
+
+Migrador CSV → PostgreSQL es una herramienta de línea de comandos que:
+
+- **Valida** datos CSV contra esquemas YAML configurables
+- **Migra** datos a PostgreSQL con transacciones atómicas
+- **Reporta** resultados estructurados (JSON, CLI)
+- **Reutiliza** validadores mediante patrones Strategy y Repository
+
+### Problemas que Resuelve
+- ❌ **Migraciones manuales**: Scripts SQL frágiles y no reutilizables
+- ❌ **Validación duplicada**: Cada proyecto reinventa validadores de datos
+- ❌ **Errores silenciosos**: Migraciones fallan sin reportes claros
+- ❌ **Falta de atomicidad**: Datos parciales en caso de errores
+
+### Beneficios
+- ✅ **Validación declarativa**: Esquemas YAML como contrato de datos
+- ✅ **Transacciones ACID**: Rollback automático en umbrales de error
+- ✅ **Reporting estructurado**: Métricas de importación/rechazo
+- ✅ **Extensibilidad**: Patrones SOLID para agregar validadores
+
+---
+
+## 🚀 Instalación
+
+### Requisitos Previos
+- Python 3.11+
+- PostgreSQL 15+
+- Git (para submodules)
+
+### Paso 1: Clonar con Submodules
+```bash
+git clone --recurse-submodules https://github.com/Fisherk2/migrator-csv-postgres
+cd migrator-csv-postgres
+
+# Si olvidaste --recurse-submodules:
+git submodule update --init --recursive
+```
+
+### Paso 2: Entorno Virtual
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate  # Windows
+```
+
+### Paso 3: Dependencias
+```bash
+pip install -r requirements.txt
+```
+
+### Paso 4: Configurar Base de Datos
+```bash
+# Copiar configuración
+cp .env.example .env
+
+# Editar credenciales
+nano .env
+```
+
+### Paso 5: Inicializar Base de Datos
+```bash
+# Crear esquema
+psql -U postgres -d postgres -f scripts/sql/01_create_database.sql
+psql -U postgres -d migrator_ecommerce -f scripts/sql/02_create_schema.sql
+```
+
+---
+
+## ⚡ Uso Rápido
+
+### Migración Básica
+```bash
+python scripts/run_migration.py --config config/default_migration.yaml
+```
+
+### Validación Sin Modificar (Dry Run)
+```bash
+python scripts/run_migration.py --config config/default_migration.yaml --dry-run
+```
+
+### Logs Detallados
+```bash
+python scripts/run_migration.py --config config/default_migration.yaml --verbose
+```
+
+### Archivo de Configuración Personalizado
+```bash
+python scripts/run_migration.py --config config/schema_examples/customers_schema.yaml --env-file .env.local
+```
+
+---
+
+## 🏗️ Arquitectura
+
+### Clean Architecture
+
+```mermaid
+graph TB
+    subgraph "Presentation Layer"
+        CLI[run_migration.py]
+    end
+    
+    subgraph "Application Layer"
+        Pipeline[MigrationPipeline]
+        Loader[CSVLoader]
+        Handler[ErrorHandler]
+        Reporter[ReportGenerator]
+    end
+    
+    subgraph "Domain Layer"
+        Validators[Custom Validators]
+        Schema[Schema Definitions]
+    end
+    
+    subgraph "Infrastructure Layer"
+        DBConnector[(PostgreSQL)]
+        FileSystem[CSV Files]
+        Logger[Logging]
+    end
+    
+    CLI --> Pipeline
+    Pipeline --> Loader
+    Pipeline --> Handler
+    Pipeline --> Reporter
+    Loader --> Validators
+    Loader --> DBConnector
+    Handler --> Logger
+    Reporter --> FileSystem
+    Validators --> Schema
+```
+
+### Patrones Aplicados
+- **Template Method**: `MigrationPipeline.execute()` orquesta el flujo
+- **Strategy**: Validadores configurables por tipo de dato
+- **Repository**: `DBConnector` abstrae operaciones PostgreSQL
+- **Facade**: CLI simplifica interacción con componentes internos
+
+### Flujo de Ejecución
+
+```mermaid
+sequenceDiagram
+    participant CLI
+    participant Pipeline
+    participant Loader
+    participant DB
+    participant Reporter
+    
+    CLI->>Pipeline: execute(config)
+    Pipeline->>DB: begin_transaction()
+    Pipeline->>Loader: load_and_validate()
+    Loader->>DB: create_temp_table()
+    Loader->>DB: copy_from_csv()
+    Loader->>DB: validate_and_transfer()
+    Pipeline->>DB: commit() / rollback()
+    Pipeline->>Reporter: generate_report()
+    Reporter->>CLI: stats JSON
+```
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+migrator-csv-postgres/
+├── 📄 README.md                    # Documentación principal
+├── 📄 CONTRIBUTING.MD               # Guía de contribución
+├── 📄 AGENT.MD                     # Contexto para agentes IA
+├── 📄 requirements.txt             # Dependencias Python
+├── 📄 .env.example                 # Template de variables entorno
+├── 📄 docker-compose.yml           # PostgreSQL para desarrollo
+├── 📁 src/                         # Código fuente
+│   ├── 📁 migrator/               # Lógica de negocio
+│   │   ├── 📄 pipeline.py         # Orquestador principal
+│   │   ├── 📄 csv_loader.py       # Carga y validación CSV
+│   │   ├── 📄 db_connector.py     # Conexión PostgreSQL
+│   │   ├── 📄 error_handler.py    # Manejo de errores
+│   │   └── 📄 report_generator.py # Generación de reportes
+│   └── 📁 utils/                  # Utilidades compartidas
+│       ├── 📄 logger.py           # Configuración logging
+│       └── 📄 helpers.py          # Funciones auxiliares
+├── 📁 scripts/                    # Scripts de ejecución
+│   ├── 📄 run_migration.py        # CLI principal
+│   ├── 📄 init_db.py              # Inicialización BD
+│   └── 📁 sql/                    # Scripts SQL
+│       ├── 📄 01_create_database.sql
+│       ├── 📄 02_create_schema.sql
+│       └── 📄 03_create_indexes.sql
+├── 📁 config/                     # Configuración YAML
+│   ├── 📄 default_migration.yaml  # Configuración por defecto
+│   └── 📁 schema_examples/        # Esquemas de validación
+│       ├── 📄 customers_schema.yaml
+│       ├── 📄 orders_schema.yaml
+│       └── 📄 products_schema.yaml
+├── 📁 test/                       # Tests
+│   ├── 📄 conftest.py             # Fixtures pytest
+│   ├── 📁 unit/                   # Tests unitarios
+│   ├── 📁 integration/            # Tests de integración
+│   └── 📁 fixtures/               # Datos de prueba
+│       ├── 📄 valid_customers.csv
+│       └── 📄 invalid_customers.csv
+├── 📁 docs/                       # Documentación técnica
+│   ├── 📄 ADR.md                  # Decisiones arquitectónicas
+│   ├── 📄 ERD.md                  # Diagrama Entidad-Relación
+│   └── 📄 POSTGRES_SETUP.md       # Guía de configuración
+└── 📁 extern/                     # Dependencias externas
+    └── 📁 auditor/                # Git submodule: validadores
+```
+
+---
+
+## 🔧 Comandos CLI
+
+### Opciones Disponibles
+```bash
+python scripts/run_migration.py --help
+```
+
+| Flag | Descripción | Ejemplo |
+|------|-------------|---------|
+| `--config` | Ruta a YAML de configuración (requerido) | `--config config/custom.yaml` |
+| `--env-file` | Archivo .env con credenciales (opcional) | `--env-file .env.local` |
+| `--dry-run` | Validar sin modificar BD | `--dry-run` |
+| `--verbose` | Logs detallados (DEBUG) | `--verbose` |
+
+### Ejemplos de Uso
+
+#### Migración Completa
+```bash
+python scripts/run_migration.py --config config/default_migration.yaml --verbose
+```
+
+#### Validación Previa
+```bash
+python scripts/run_migration.py --config config/schema_examples/customers_schema.yaml --dry-run
+```
+
+#### Entorno Específico
+```bash
+python scripts/run_migration.py --config config/custom.yaml --env-file .env.staging
+```
+
+---
+
+## 🧪 Testing
+
+### Ejecutar Todos los Tests
+```bash
+pytest
+```
+
+### Tests Unitarios
+```bash
+pytest test/unit/
+```
+
+### Tests de Integración
+```bash
+pytest test/integration/ -m integration
+```
+
+### Cobertura de Código
+```bash
+pytest --cov=src --cov-report=html
+```
+
+### Variables de Entorno para Tests
+```bash
+export TEST_DB_AVAILABLE=true
+export TEST_DB_HOST=localhost
+export TEST_DB_NAME=migrator_test
+export TEST_DB_USER=test_user
+export TEST_DB_PASSWORD=test_password
+```
+
+---
+
+## 📚 Documentación
+
+### Documentación Técnica
+- **[ADR.md](docs/ADR.md)** - Decisiones Arquitectónicas
+- **[ERD.md](docs/ERD.md)** - Diagrama Entidad-Relación
+- **[POSTGRES_SETUP.md](docs/POSTGRES_SETUP.md)** - Configuración PostgreSQL
+
+### Configuración
+- **[config/default_migration.yaml](config/default_migration.yaml)** - Plantilla de configuración
+- **[config/schema_examples/](config/schema_examples/)** - Esquemas de validación por entidad
+
+### Guías de Contribución
+- **[CONTRIBUTING.MD](CONTRIBUTING.MD)** - Flujo de trabajo y estándares
+- **[AGENT.MD](AGENT.MD)** - Contexto para agentes de IA
+
+---
+
+## 🤝 Contribución
+
+¡Las contribuciones son bienvenidas! Por favor lee [CONTRIBUTING.MD](CONTRIBUTING.MD) para:
+
+- Flujo de trabajo (fork → branch → PR)
+- Estándares de código (PEP 8, type hints, docstrings)
+- Requisitos de testing (pytest, cobertura mínima)
+- Proceso de review y merge
+
+---
+
+## 📄 Licencia
+
+MIT License - ver archivo [LICENSE](LICENSE) para detalles.
+
+---
+
+> 💡 **Nota**: Este proyecto sigue principios de Clean Architecture y SOLID. Cada componente tiene una responsabilidad única y clara separación de preocupaciones.
 
 ---
 
