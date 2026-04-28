@@ -126,16 +126,19 @@ class TestCSVLoaderRowValidation:
 class TestCSVLoaderLoadToTempTable:
     """Tests integración para carga a tabla temporal."""
     
+    @patch.object(CSVLoader, '_validate_file_access')
+    @patch.object(CSVLoader, '_generate_temp_table_name')
     @patch.object(CSVLoader, '_create_temp_table')
     @patch.object(CSVLoader, '_read_and_validate_csv')
+    @patch.object(CSVLoader, '_copy_rows_to_temp_table')
     def test_load_csv_to_temp_table_returns_temp_table_name(
-        self, mock_read, mock_create, mock_db_connector
+        self, mock_copy, mock_read, mock_create, mock_generate, mock_validate, mock_db_connector
     ):
         """Valida que load_csv_to_temp_table retorne el nombre de la tabla temporal."""
         loader = CSVLoader(logger=None)
-        
-        mock_create.return_value = "temp_customers_123"
-        mock_read.return_value = {"valid_rows": [], "errors": []}
+
+        mock_generate.return_value = "temp_customers_123"
+        mock_read.return_value = ([{}], [])
         
         schema = {"id": "integer", "name": "string"}
         validators = {}
@@ -154,20 +157,21 @@ class TestCSVLoaderLoadToTempTable:
     def test_load_csv_to_temp_table_respects_max_errors_threshold(self, mock_db_connector):
         """Valida que se respete umbral de max_errors_before_rollback."""
         loader = CSVLoader(logger=None)
-        
-        with patch.object(CSVLoader, '_create_temp_table') as mock_create, \
-             patch.object(CSVLoader, '_read_and_validate_csv') as mock_read:
-            
+
+        with patch.object(CSVLoader, '_validate_file_access'), \
+             patch.object(CSVLoader, '_generate_temp_table_name'), \
+             patch.object(CSVLoader, '_create_temp_table') as mock_create, \
+             patch.object(CSVLoader, '_read_and_validate_csv') as mock_read, \
+             patch.object(CSVLoader, '_copy_rows_to_temp_table'), \
+             patch.object(CSVLoader, 'rollback_temp_table') as mock_rollback:
+
             mock_create.return_value = "temp_customers_123"
-            mock_read.return_value = {"valid_rows": [], "errors": [Mock()] * 10}
+            mock_read.return_value = ([{}], [Mock()] * 10)
             
             schema = {"id": "integer"}
             validators = {}
             config = {"validation": {"max_errors_before_rollback": 5}}
-            
-            # ■■■■■■■■■■■■■ FIX: Aislamiento mejorado - mockear rollback para evitar side effects ■■■■■■■■■■■■■
-            mock_db_connector.rollback = Mock()
-            
+
             result = loader.load_csv_to_temp_table(
                 csv_path="/fake/path.csv",
                 schema=schema,
@@ -175,8 +179,8 @@ class TestCSVLoaderLoadToTempTable:
                 db_connector=mock_db_connector,
                 config=config
             )
-            
-            mock_db_connector.rollback.assert_called()
+
+            mock_rollback.assert_called_once()
 
 
 class TestCSVLoaderBuffering:
@@ -185,12 +189,13 @@ class TestCSVLoaderBuffering:
     def test_buffer_handles_large_csv_without_memory_issues(self, mock_db_connector):
         """Valida que buffer maneje CSV grande sin problemas de memoria."""
         loader = CSVLoader(logger=None)
-        
-        with patch.object(CSVLoader, '_create_temp_table'), \
+
+        with patch.object(CSVLoader, '_validate_file_access'), \
+             patch.object(CSVLoader, '_create_temp_table'), \
              patch.object(CSVLoader, '_read_and_validate_csv') as mock_read, \
              patch.object(CSVLoader, '_copy_rows_to_temp_table') as mock_copy:
             
-            mock_read.return_value = {"valid_rows": list(range(1000)), "errors": []}
+            mock_read.return_value = ([{"id": i} for i in range(1000)], [])
             mock_copy.return_value = 1000
             
             schema = {"id": "integer"}
@@ -214,12 +219,14 @@ class TestCSVLoaderErrorAccumulation:
     def test_errors_accumulate_across_multiple_invalid_rows(self, mock_db_connector):
         """Valida que errores se acumulen correctamente."""
         loader = CSVLoader(logger=None)
-        
-        with patch.object(CSVLoader, '_create_temp_table'), \
-             patch.object(CSVLoader, '_read_and_validate_csv') as mock_read:
+
+        with patch.object(CSVLoader, '_validate_file_access'), \
+             patch.object(CSVLoader, '_create_temp_table'), \
+             patch.object(CSVLoader, '_read_and_validate_csv') as mock_read, \
+             patch.object(CSVLoader, '_copy_rows_to_temp_table'):
             
             mock_errors = [Mock() for _ in range(5)]
-            mock_read.return_value = {"valid_rows": [], "errors": mock_errors}
+            mock_read.return_value = ([{}], mock_errors)
             
             schema = {"id": "integer"}
             validators = {}

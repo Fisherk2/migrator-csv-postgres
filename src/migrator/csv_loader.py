@@ -259,22 +259,24 @@ class CSVLoader:
     
     def _generate_temp_table_name(self, csv_path: str) -> str:
         """Genera nombre único para tabla temporal basado en el archivo CSV.
-        
-        DECISIÓN: Usar timestamp y nombre de archivo para evitar colisiones
+
+        DECISIÓN: Usar timestamp con microsegundos y random para evitar colisiones
         en migraciones concurrentes sin hardcodear nombres.
-        
+
         Args:
             csv_path: Ruta al archivo CSV.
-            
+
         Returns:
             Nombre de tabla temporal único.
         """
         import time
+        import random
         from pathlib import Path
-        
+
         csv_name = Path(csv_path).stem
-        timestamp = int(time.time())
-        return f"temp_{csv_name}_{timestamp}"
+        timestamp = int(time.time() * 1000000)  # Microsegundos para unicidad
+        random_suffix = random.randint(1000, 9999)
+        return f"temp_{csv_name}_{timestamp}_{random_suffix}"
     
     def _create_temp_table(
         self, 
@@ -405,35 +407,44 @@ class CSVLoader:
     ) -> List[str]:
         """
         Valida una fila usando validadores inyectados.
-        
+
         Args:
             row: Diccionario con valores de la fila CSV.
             schema: Definición de campos esperados.
             validators: Funciones validadoras por campo.
             row_num: Número de fila para reporte de errores.
-            
+
         Returns:
             Lista de mensajes de error encontrados en la fila.
         """
         row_errors = []
-        
+
         for field_name, field_def in schema.items():
             value = row.get(field_name)
-            
+
             # ■■■■■■■■■■■■■ Validación de tipo y formato delegada ■■■■■■■■■■■■■
             if field_name in validators:
                 try:
                     is_valid, error_msg, suggestion = validators[field_name](value)
-                    
+
                     if not is_valid:
                         error_detail = f"Fila {row_num}, campo '{field_name}': {error_msg}"
                         if suggestion:
                             error_detail += f" (Sugerencia: {suggestion})"
                         row_errors.append(error_detail)
-                        
+
                 except Exception as e:
                     row_errors.append(f"Fila {row_num}, campo '{field_name}': Error en validador: {e}")
-        
+            else:
+                # ■■■■■■■■■■■■■ Validación de tipo básica según schema ■■■■■■■■■■■■■
+                field_type = field_def if isinstance(field_def, str) else field_def.get("type", "string")
+                if field_type == "integer":
+                    if value is not None and value != "":
+                        try:
+                            int(value)
+                        except (ValueError, TypeError):
+                            row_errors.append(f"Fila {row_num}, campo '{field_name}': '{value}' no es un entero válido")
+
         return row_errors
     
     def _copy_rows_to_temp_table(

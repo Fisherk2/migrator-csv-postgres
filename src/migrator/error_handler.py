@@ -45,16 +45,16 @@ class MigrationError:
 def generate_correction_suggestion(field_type: str, invalid_value: str) -> Optional[str]:
     """
     Genera sugerencias heurísticas para corrección de errores comunes.
-    
+
     DECISIÓN: Lógica determinista y segura. Si la sugerencia es incierta,
     retorna None para evitar información incorrecta.
-    
+
     Args:
         field_type: Tipo de campo (email, phone, integer, float, etc.).
         invalid_value: Valor que causó el error.
     Returns:
         Sugerencia de corrección o None si no se puede inferir.
-        
+
     Examples:
         >>> generate_correction_suggestion("email", "test.com")
         'Agregar @: test@test.com'
@@ -63,12 +63,35 @@ def generate_correction_suggestion(field_type: str, invalid_value: str) -> Optio
     """
     if not field_type or not invalid_value:
         return None
-    
+
     value = str(invalid_value).strip()
-    
+
+    # ■■■■■■■■■■■■■ Typos comunes de dominio de email ■■■■■■■■■■■■■
+    _COMMON_DOMAIN_TYPOS = {
+        "gmial.com": "gmail.com",
+        "gmial.es": "gmail.com",
+        "gamil.com": "gmail.com",
+        "hotmal.com": "hotmail.com",
+        "hotmial.com": "hotmail.com",
+        "yahooo.com": "yahoo.com",
+        "outlok.com": "outlook.com",
+        "outlook.co": "outlook.com",
+        "proton.com": "proton.me",
+        "porton.me": "proton.me",
+    }
+
     if field_type == "email":
         if "@" not in value:
             return f"Agregar @: {value}@{value}.com" if "." in value else f"Agregar @: {value}@email.com"
+
+        # ■■■■■■■■■■■■■ Detectar typos comunes de dominio ■■■■■■■■■■■■■
+        if "@" in value:
+            local, domain = value.split("@", 1)
+            domain_lower = domain.lower()
+            if domain_lower in _COMMON_DOMAIN_TYPOS:
+                correction = _COMMON_DOMAIN_TYPOS[domain_lower]
+                return f"¿Quisiste decir: {local}@{correction}?"
+
         if "." not in value.split("@")[-1]:
             return f"Agregar dominio: {value}.com"
     
@@ -126,15 +149,15 @@ class ErrorHandler:
     def has_critical_errors(self, max_allowed: int) -> bool:
         """
         Verifica si se superó el umbral crítico de errores.
-        
+
         Args:
             max_allowed: Número máximo de errores permitidos.
         Returns:
             True si se superó el umbral, False en caso contrario.
         """
-        if len(self._errors) > max_allowed:
+        if len(self._errors) >= max_allowed:
             self._logger.error(
-                f"Umbral crítico superado: {len(self._errors)} > {max_allowed}"
+                f"Umbral crítico superado: {len(self._errors)} >= {max_allowed}"
             )
             return True
         return False
@@ -189,3 +212,9 @@ class ErrorHandler:
         Retorna copia de la lista de errores.
         """
         return self._errors.copy()
+
+    def clear(self) -> None:
+        """
+        Limpia la lista de errores acumulados.
+        """
+        self._errors.clear()

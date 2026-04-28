@@ -91,12 +91,11 @@ def mock_db_connector() -> Mock:
     # Configurar comportamiento por defecto
     mock.is_connected.return_value = False
     mock.connect.return_value = None
-    mock.disconnect.return_value = None
-    mock.begin_transaction.return_value = None
+    mock.close.return_value = None
+    mock.begin.return_value = None
     mock.commit.return_value = None
     mock.rollback.return_value = None
     mock.execute_copy_from.return_value = 0
-    mock.insert_batch.return_value = 0
     
     return mock
 

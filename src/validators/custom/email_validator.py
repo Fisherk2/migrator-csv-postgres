@@ -96,16 +96,23 @@ def validate_email_format(value: Optional[str]) -> Tuple[bool, str, Optional[str
     email = value.strip()
     if not email:
         return False, "Email no puede estar vacío", None
-    
+
+    # ■■■■■■■■■■■■■ Validación de caracteres problemáticos antes del regex ■■■■■■■■■■■■■
+    if email.startswith(".") or email.endswith("."):
+        return False, "Email no puede empezar o terminar con un punto", None
+
+    if ".." in email:
+        return False, "Email no puede contener puntos consecutivos", None
+
     # ■■■■■■■■■■■■■ Validación principal con regex compilado ■■■■■■■■■■■■■
     if not _EMAIL_REGEX.match(email):
 
         # ▲▲▲▲▲▲ Generar sugerencia si hay patrón reconocible ▲▲▲▲▲▲
         suggestion = _generate_email_suggestion(email)
-        
+
         if suggestion:
             return (
-                False, 
+                False,
                 f"Formato de email inválido. ¿Quisiste decir '{suggestion}'?",
                 suggestion
             )
@@ -115,6 +122,19 @@ def validate_email_format(value: Optional[str]) -> Tuple[bool, str, Optional[str
                 "Formato de email inválido. Se espera formato: usuario@dominio.com",
                 None
             )
+
+    # ■■■■■■■■■■■■■ Verificar typos comunes de dominio aunque el formato sea válido ■■■■■■■■■■■■■
+    if "@" in email:
+        local, domain = email.split("@", 1)
+        domain_lower = domain.lower()
+        for typo, correction in _COMMON_TYPOS.items():
+            if domain_lower == typo:
+                suggestion = f"{local}@{correction}"
+                return (
+                    False,
+                    f"Posible error en dominio. ¿Quisiste decir '{suggestion}'?",
+                    suggestion
+                )
     
     # ■■■■■■■■■■■■■ Validaciones adicionales de negocio ■■■■■■■■■■■■■
     if email.count("@") != 1:
@@ -128,14 +148,7 @@ def validate_email_format(value: Optional[str]) -> Tuple[bool, str, Optional[str
     
     if len(domain) > 253:
         return False, "Dominio del email demasiado largo (máx 253 caracteres)", None
-    
-    # ■■■■■■■■■■■■■ Validación de caracteres problemáticos comunes ■■■■■■■■■■■■■
-    if ".." in email:
-        return False, "Email no puede contener puntos consecutivos", None
-    
-    if email.startswith(".") or email.endswith("."):
-        return False, "Email no puede empezar o terminar con punto", None
-    
+
     # ■■■■■■■■■■■■■ Éxito: formato válido ■■■■■■■■■■■■■
     return True, "", None
 

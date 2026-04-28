@@ -21,16 +21,15 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+# ■■■■■■■■■■■■■ Agregar path del submodule al sys.path para importaciones directas ■■■■■■■■■■■■■
+_auditor_path = Path(__file__).parent.parent.parent / "extern" / "auditor" / "src"
+if str(_auditor_path) not in sys.path:
+    sys.path.insert(0, str(_auditor_path))
+
 # ■■■■■■■■■■■■■ Intentar importar desde el auditor externo con manejo de errores robusto ■■■■■■■■■■■■■
 try:
     # ▲▲▲▲▲▲ Importar clase TypeValidator del auditor ▲▲▲▲▲▲
-    from extern.auditor.src.validators.type_validator import TypeValidator
-    
-    # ▲▲▲▲▲▲ Importar funciones de validación de esquemas del auditor ▲▲▲▲▲▲
-    from extern.auditor.src.validators.schema_validator import (
-        load_schema_from_yaml,
-        validate_schema_format,
-    )
+    from validators.type_validator import TypeValidator
     
     # ▲▲▲▲▲▲ Instancia singleton para wrappers ▲▲▲▲▲▲
     _type_validator = TypeValidator()
@@ -91,13 +90,9 @@ from .custom.phone_validator import validate_phone_format
 __all__ = [
     # ▲▲▲▲▲▲ Validadores de tipos (wrappers usando TypeValidator del auditor) ▲▲▲▲▲▲
     "validate_integer",
-    "validate_float", 
+    "validate_float",
     "validate_string",
     "validate_boolean",
-    
-    # TODO: ▲▲▲▲▲▲ Validadores de esquemas (re-exportados del auditor) ▲▲▲▲▲▲
-    "load_schema_from_yaml",
-    "validate_schema_format",
     
     # ▲▲▲▲▲▲ Validadores custom específicos del dominio ▲▲▲▲▲▲
     "validate_email_format",

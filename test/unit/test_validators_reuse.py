@@ -188,4 +188,4 @@ class TestValidatePhoneFormat:
         """Valida que inputs inválidos fallen con mensaje correcto."""
         is_valid, message, suggestion = validate_phone_format(value)
         assert is_valid is False
-        assert expected_error_msg in message.lower()
+        assert expected_error_msg.lower() in message.lower()

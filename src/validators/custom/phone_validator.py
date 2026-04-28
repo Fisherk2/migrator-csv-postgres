@@ -131,9 +131,17 @@ def validate_phone_format(value: Optional[str]) -> Tuple[bool, str, Optional[str
     
     # ■■■■■■■■■■■■■ Limpiar número de caracteres no numéricos ■■■■■■■■■■■■■
     cleaned_phone = _clean_phone_number(phone)
-    
+
+    # ■■■■■■■■■■■■■ Validar que tenga dígitos después de limpieza ■■■■■■■■■■■■■
+    if not cleaned_phone or cleaned_phone == "+":
+        return (
+            False,
+            "Formato de telefono inválido: debe contener al menos un dígito",
+            None
+        )
+
     # ■■■■■■■■■■■■■ Validar longitud mínima después de limpieza ■■■■■■■■■■■■■
-    if len(cleaned_phone) < 7:
+    if len(cleaned_phone.replace("+", "")) < 7:
         return (
             False,
             "Teléfono demasiado corto (mínimo 7 dígitos)",
@@ -147,7 +155,16 @@ def validate_phone_format(value: Optional[str]) -> Tuple[bool, str, Optional[str
             "Teléfono demasiado largo (máximo 15 dígitos)",
             None
         )
-    
+
+    # ■■■■■■■■■■■■■ Si no tiene + y tiene 10 dígitos, sugerir formato MX ■■■■■■■■■■■■■
+    if not cleaned_phone.startswith("+") and len(cleaned_phone) == 10:
+        suggestion = f"+52{cleaned_phone}"
+        return (
+            False,
+            f"Formato de teléfono inválido. ¿Quisiste decir '{suggestion}'?",
+            suggestion
+        )
+
     # ■■■■■■■■■■■■■ Validación principal con regex compilado ■■■■■■■■■■■■■
     if not _PHONE_REGEX.match(cleaned_phone):
 
