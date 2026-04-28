@@ -29,10 +29,11 @@ SET client_min_messages = warning;
 --END $$;
 
 -- ■■■■■■■■■■■ Crear base de datos (solo si no existe) ■■■■■■■■■■■■■■■■
--- Nota: Usamos el usuario de la variable de entorno para hacerlo dinámico
-CREATE DATABASE migrator_ecommerce
-    WITH 
-    OWNER = migrator_user
+-- DECISIÓN: Usar placeholders {{DB_NAME}} y {{DB_USER}} para parametrización
+-- Python reemplaza estos placeholders con valores de variables de entorno
+CREATE DATABASE {{DB_NAME}}
+    WITH
+    OWNER = {{DB_USER}}
     ENCODING = 'UTF8'
     LC_COLLATE = 'en_US.UTF-8'
     LC_CTYPE = 'en_US.UTF-8'
@@ -42,11 +43,11 @@ CREATE DATABASE migrator_ecommerce
 
 -- ■■■■■■■■■■■■ Otorgar permisos básicos al usuario de la variable de entorno ■■■■■■■■■■■■
 -- Esto asegura que la base de datos sea accesible para scripts de migración subsecuentes
-GRANT ALL PRIVILEGES ON DATABASE migrator_ecommerce TO current_user;
+GRANT ALL PRIVILEGES ON DATABASE {{DB_NAME}} TO {{DB_USER}};
 
 -- ■■■■■■■■■■■■ Proporcionar instrucciones de uso para desarrolladores ■■■■■■■■■■■■
 -- Este comentario sirve como documentación para miembros del equipo
-COMMENT ON DATABASE migrator_ecommerce IS 'Base de datos principal de la aplicación - creada con create_database.sql';
+COMMENT ON DATABASE {{DB_NAME}} IS 'Base de datos principal de la aplicación - creada con create_database.sql';
 
 -- ■■■■■■■■■■■■■ Desconectarse de la nueva base de datos para retornar al estado de conexión original ■■■■■■■■■■■■■
 -- Esto previene que scripts subsecuentes se ejecuten accidentalmente contra la base de datos incorrecta

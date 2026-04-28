@@ -68,6 +68,10 @@ class DatabaseInitializer:
         """
         Ejecuta el script de creación de base de datos con autocommit=True.
         
+        DECISIÓN: Reemplazar placeholders {{DB_NAME}} y {{DB_USER}} con valores
+        de variables de entorno antes de ejecutar el SQL. PostgreSQL no permite
+        parámetros en CREATE DATABASE, por lo que usamos string formatting seguro.
+        
         Returns:
             True si éxito, False si fallo
         """
@@ -84,9 +88,16 @@ class DatabaseInitializer:
             with conn.cursor() as cursor:
                 logger.info("Ejecutando creación de base de datos desde 01_create_database.sql")
                 
-                # Leer y ejecutar script SQL
+                # Leer script SQL
                 with open(script_path, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
+                
+                # DECISIÓN DE DISEÑO: Reemplazar placeholders con valores de configuración
+                # Usamos str.replace() en lugar de format() para evitar conflictos con sintaxis SQL
+                sql_content = sql_content.replace('{{DB_NAME}}', self.config.db_name)
+                sql_content = sql_content.replace('{{DB_USER}}', self.config.user)
+                
+                logger.info(f"Creando base de datos: {self.config.db_name} con owner: {self.config.user}")
                 
                 cursor.execute(sql_content)
                 
