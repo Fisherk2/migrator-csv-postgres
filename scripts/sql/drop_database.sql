@@ -15,10 +15,9 @@
 -- VERIFICACIÓN DE SEGURIDAD - NO CONTINUAR SI NO ESTÁ SEGURO
 --◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤
 
--- ■■■■■■■■■■■■■ DECISIÓN DE DISEÑO: Script simplificado sin bloques DO ■■■■■■■■■■■■■
+-- ■■■■■■■■■■■■■ DECISIÓN DE DISEÑO: Comandos separados por punto y coma ■■■■■■■■■■■■■
 -- PostgreSQL no permite DROP DATABASE dentro de transacciones.
--- Python maneja la verificación de existencia y terminación de conexiones.
--- Este script solo ejecuta el DROP directo con autocommit=True.
+-- Python leerá este script y ejecutará cada comando individualmente con autocommit=True.
 
 -- ■■■■■■■■■■■■■ Terminar conexiones activas antes de DROP ■■■■■■■■■■■■■
 -- Esto previene el error "database is being accessed by other users"

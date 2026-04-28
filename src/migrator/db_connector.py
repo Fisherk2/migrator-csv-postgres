@@ -70,11 +70,29 @@ class DBConnector:
 
         required_keys = {"host", "dbname", "user", "password"}
         missing_keys = required_keys - set(config.keys())
-        
+
         if missing_keys:
             raise ConfigurationError(
                 f"Configuración incompleta. Faltan claves: {', '.join(missing_keys)}"
             )
+
+    @property
+    def connection(self) -> connection:
+        """
+        Propiedad pública para acceder a la conexión psycopg2.
+
+        DECISIÓN: Exponer conexión para pruebas de integración que necesitan
+        acceso directo al cursor y control de transacciones.
+
+        Returns:
+            Conexión psycopg2 activa.
+
+        Raises:
+            OperationalError: Si no hay conexión activa.
+        """
+        if self._connection is None:
+            raise OperationalError("No hay conexión activa. Llame a connect() primero.")
+        return self._connection
     
     def connect(self) -> None:
         """
@@ -91,11 +109,11 @@ class DBConnector:
                 database=self._config["dbname"],
                 user=self._config["user"],
                 password=self._config["password"],
-                port=self._config.get("port", 5432),
-                autocommit=False
+                port=self._config.get("port", 5432)
             )
+            self._connection.autocommit = False
             self._logger.info("Conexión establecida con PostgreSQL")
-            
+
         except psycopg2.OperationalError as e:
             raise OperationalError(f"Error de conexión a PostgreSQL: {e}") from e
         except psycopg2.Error as e:

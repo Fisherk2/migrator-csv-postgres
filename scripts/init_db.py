@@ -68,9 +68,9 @@ class DatabaseInitializer:
         """
         Ejecuta el script de creación de base de datos con autocommit=True.
 
-        DECISIÓN: Reemplazar placeholders {{DB_NAME}} y {{DB_USER}} con valores
-        de variables de entorno antes de ejecutar el SQL. PostgreSQL no permite
-        parámetros en CREATE DATABASE, por lo que usamos string formatting seguro.
+        DECISIÓN: Leer script SQL y ejecutar comandos individualmente con autocommit=True.
+        PostgreSQL no permite CREATE DATABASE dentro de transacciones, por lo que cada comando
+        debe ejecutarse por separado.
 
         Returns:
             True si éxito, False si fallo
@@ -81,25 +81,38 @@ class DatabaseInitializer:
             return False
 
         try:
-            # Configurar autocommit para CREATE DATABASE
-            conn.autocommit = True
-            logger.info("Usando autocommit=True para CREATE DATABASE")
-
             with conn.cursor() as cursor:
                 logger.info("Ejecutando creación de base de datos desde 01_create_database.sql")
 
-                # Leer script SQL
+                # ■■■■■■■■■■■■■ Leer script SQL ■■■■■■■■■■■■■
                 with open(script_path, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
 
-                # DECISIÓN DE DISEÑO: Reemplazar placeholders con valores de configuración
-                # Usamos str.replace() en lugar de format() para evitar conflictos con sintaxis SQL
+                # ■■■■■■■■■■■■■ Reemplazar placeholders con valores de configuración ■■■■■■■■■■■■■
                 sql_content = sql_content.replace('{{DB_NAME}}', self.config.db_name)
                 sql_content = sql_content.replace('{{DB_USER}}', self.config.user)
 
                 logger.info(f"Creando base de datos: {self.config.db_name} con owner: {self.config.user}")
 
-                cursor.execute(sql_content)
+                # ■■■■■■■■■■■■■ Separar comandos por punto y coma, ignorando comentarios y líneas vacías ■■■■■■■■■■■■■
+                # Mantener el orden de ejecución
+                commands = []
+                current_cmd = []
+                for line in sql_content.split('\n'):
+                    line = line.strip()
+                    if not line or line.startswith('--'):
+                        continue
+                    current_cmd.append(line)
+                    if line.endswith(';'):
+                        cmd = ' '.join(current_cmd)
+                        if cmd:
+                            commands.append(cmd)
+                        current_cmd = []
+
+                # ■■■■■■■■■■■■■ Ejecutar cada comando individualmente ■■■■■■■■■■■■■
+                for cmd in commands:
+                    logger.debug(f"Ejecutando comando: {cmd[:50]}...")
+                    cursor.execute(cmd)
 
                 logger.info("Completado: creación de base de datos")
                 return True
@@ -115,11 +128,12 @@ class DatabaseInitializer:
         """
         Ejecuta el script de eliminación de base de datos con autocommit=True.
 
-        DECISIÓN: Reemplazar placeholder {{DB_NAME}} con el nombre de BD especificado.
-        PostgreSQL no permite parámetros en DROP DATABASE, por lo que usamos string formatting seguro.
+        DECISIÓN: Leer script SQL y ejecutar comandos individualmente con autocommit=True.
+        PostgreSQL no permite DROP DATABASE dentro de transacciones, por lo que cada comando
+        debe ejecutarse por separado.
 
         Args:
-            conn: Conexión a base de datos postgres.
+            conn: Conexión a base de datos postgres (ya con autocommit=True).
             db_name: Nombre de la base de datos a eliminar.
 
         Returns:
@@ -131,21 +145,35 @@ class DatabaseInitializer:
             return False
 
         try:
-            # Configurar autocommit para DROP DATABASE
-            conn.autocommit = True
-            logger.info("Usando autocommit=True para DROP DATABASE")
-
             with conn.cursor() as cursor:
                 logger.info(f"Ejecutando eliminación de base de datos: {db_name}")
 
-                # Leer script SQL
+                # ■■■■■■■■■■■■■ Leer script SQL ■■■■■■■■■■■■■
                 with open(script_path, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
 
-                # DECISIÓN DE DISEÑO: Reemplazar placeholder con nombre de BD especificado
+                # ■■■■■■■■■■■■■ Reemplazar placeholder con nombre de BD especificado ■■■■■■■■■■■■■
                 sql_content = sql_content.replace('{{DB_NAME}}', db_name)
 
-                cursor.execute(sql_content)
+                # ■■■■■■■■■■■■■ Separar comandos por punto y coma, ignorando comentarios y líneas vacías ■■■■■■■■■■■■■
+                # Mantener el orden de ejecución
+                commands = []
+                current_cmd = []
+                for line in sql_content.split('\n'):
+                    line = line.strip()
+                    if not line or line.startswith('--'):
+                        continue
+                    current_cmd.append(line)
+                    if line.endswith(';'):
+                        cmd = ' '.join(current_cmd)
+                        if cmd:
+                            commands.append(cmd)
+                        current_cmd = []
+
+                # ■■■■■■■■■■■■■ Ejecutar cada comando individualmente ■■■■■■■■■■■■■
+                for cmd in commands:
+                    logger.debug(f"Ejecutando comando: {cmd[:50]}...")
+                    cursor.execute(cmd)
 
                 logger.info(f"Completado: eliminación de base de datos {db_name}")
                 return True
@@ -175,13 +203,13 @@ class DatabaseInitializer:
             return False
         
         try:
-            # Configurar transacción normal (no autocommit)
+            # ■■■■■■■■■■■■■ Configurar transacción normal (no autocommit) ■■■■■■■■■■■■■
             conn.autocommit = False
             
             with conn.cursor() as cursor:
                 logger.info(f"Ejecutando {description} desde {script_name}")
                 
-                # Leer y ejecutar script SQL
+                # ■■■■■■■■■■■■■ Leer y ejecutar script SQL ■■■■■■■■■■■■■
                 with open(script_path, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
                 
@@ -200,12 +228,25 @@ class DatabaseInitializer:
             logger.error(f"Error inesperado en {description}: {e}")
             return False
     
-    def _create_connection(self, dbname: str) -> connection:
-        """Crea conexión a base de datos con manejo de errores."""
+    def _create_connection(self, dbname: str, autocommit: bool = False) -> connection:
+        """
+        Crea conexión a base de datos con manejo de errores.
+
+        Args:
+            dbname: Nombre de la base de datos.
+            autocommit: Si True, establece autocommit=True en la conexión (para CREATE/DROP DATABASE).
+
+        Returns:
+            Conexión a base de datos.
+        """
         try:
             conn_string = self.config.get_connection_string(dbname)
             logger.info(f"Conectando a PostgreSQL en {self.config.host}:{self.config.port}/{dbname}")
-            return psycopg2.connect(conn_string)
+            conn = psycopg2.connect(conn_string)
+            if autocommit:
+                conn.autocommit = True
+                logger.info("Autocommit habilitado en conexión")
+            return conn
         except OperationalError as e:
             logger.error(f"No se puede conectar a {dbname}: {e}")
             raise
@@ -226,10 +267,11 @@ class DatabaseInitializer:
         conn = None
 
         try:
-            # Conectar a postgres para poder eliminar otras bases de datos
-            conn = self._create_connection("postgres")
 
-            # Ejecutar script de eliminación
+            # ■■■■■■■■■■■■■ Conectar a postgres con autocommit=True para poder eliminar otras bases de datos ■■■■■■■■■■■■■
+            conn = self._create_connection("postgres", autocommit=True)
+
+            # ■■■■■■■■■■■■■ Ejecutar script de eliminación ■■■■■■■■■■■■■
             if not self._drop_database(conn, db_name):
                 return False
 
@@ -259,7 +301,7 @@ class DatabaseInitializer:
         try:
             # ■■■■■■■■■■■■■ PASO 1: Conectar a BD mantenimiento para crear BD ■■■■■■■■■■■■■
             logger.info("=== FASE 1: Creación de base de datos ===")
-            conn_maintenance = self._create_connection("postgres")
+            conn_maintenance = self._create_connection("postgres", autocommit=True)
 
             # ▲▲▲▲▲ Verificar si base de datos ya existe ▲▲▲▲▲▲
             with conn_maintenance.cursor() as cursor:
@@ -360,7 +402,11 @@ Ejemplos:
 
 
 def load_env_file(env_file: Optional[str]) -> None:
-    """Carga variables desde archivo .env si existe."""
+    """Carga variables desde archivo .env si existe.
+
+    DECISIÓN: Usar setdefault para que variables de entorno de línea de comando
+    tengan prioridad sobre el archivo .env. Esto permite sobrescribir DB_NAME para pruebas.
+    """
     if env_file and Path(env_file).exists():
         logger.info(f"Cargando variables desde: {env_file}")
         with open(env_file, 'r') as f:
@@ -368,7 +414,7 @@ def load_env_file(env_file: Optional[str]) -> None:
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    os.environ[key] = value
+                    os.environ.setdefault(key, value)
     elif Path('.env').exists():
         logger.info("Cargando variables desde: .env (default)")
         with open('.env', 'r') as f:
@@ -376,7 +422,7 @@ def load_env_file(env_file: Optional[str]) -> None:
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    os.environ[key] = value
+                    os.environ.setdefault(key, value)
 
 
 def main() -> int:

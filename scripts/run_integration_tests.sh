@@ -145,10 +145,12 @@ load_test_config() {
     # DECISIÓN: Usar TEST_* con fallback a DB_* para pruebas
     # Esto permite reutilizar contenedor existente con aislamiento lógico
     TEST_DB_HOST="${TEST_DB_HOST:-${DB_HOST:-localhost}}"
-    TEST_DB_PORT="${TEST_DB_PORT:-${DB_PORT:-5432}}"
+    TEST_DB_PORT="${TEST_DB_PORT:-${DB_PORT:-5433}}"
     TEST_DB_NAME="${TEST_DB_NAME:-migrator_test}"
-    TEST_DB_USER="${TEST_DB_USER:-${DB_USER:-migrator_user}}"
-    TEST_DB_PASSWORD="${TEST_DB_PASSWORD:-${DB_PASSWORD:-dev_password_123}}"
+    # DECISIÓN: Usar DB_USER del contenedor existente para autenticación
+    # El contenedor solo tiene configurado el usuario migrator_user
+    TEST_DB_USER="${DB_USER:-migrator_user}"
+    TEST_DB_PASSWORD="${DB_PASSWORD:-dev_password_123}"
     
     # DECISIÓN DE DISEÑO: Validar que TEST_DB_NAME no sea producción
     # Evitar accidentalmente ejecutar pruebas contra base de datos de producción
@@ -172,8 +174,41 @@ load_test_config() {
 }
 
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-# FUNCIÓN DE ESPERA Y HEALTH CHECK
+# FUNCIÓN DE VERIFICACIÓN Y CREACIÓN DE CONTENEDOR
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+ensure_container_running() {
+    log_info "🐳 Verificando estado del contenedor..."
+
+    # Verificar si el contenedor existe y está corriendo
+    if docker-compose -f "$COMPOSE_FILE" ps -q | grep -q .; then
+        log_success "✅ Contenedor ya está corriendo"
+        return 0
+    fi
+
+    log_warning "⚠️ Contenedor no encontrado o no corriendo"
+    log_info "🐳 Iniciando contenedor Docker..."
+
+    # Verificar que docker-compose.yml existe
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        log_error "❌ Archivo docker-compose.yml no encontrado: $COMPOSE_FILE"
+        exit 2
+    fi
+
+    # Crear e iniciar contenedor
+    if docker-compose -f "$COMPOSE_FILE" up -d 2>&1; then
+        log_success "✅ Contenedor iniciado exitosamente"
+    else
+        log_error "❌ Error al iniciar contenedor"
+        log_info "📋 Verificando logs de Docker Compose..."
+        docker-compose -f "$COMPOSE_FILE" logs --tail=20
+        exit 2
+    fi
+}
+
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+# FUNCIÓN DE ESPERA Y HEALTH CHECK
+# ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 wait_for_postgres() {
     log_info "⏳ Esperando a que PostgreSQL inicie..."
@@ -215,7 +250,7 @@ create_test_database() {
     # Esto hace el proceso idempotente y reproducible
     log_info "🧹 Eliminando base de datos de prueba previa (si existe)..."
     cd "$PROJECT_DIR"
-    if python3 scripts/init_db.py --drop "$TEST_DB_NAME" > /dev/null 2>&1; then
+    if DB_NAME="$TEST_DB_NAME" DB_HOST="$TEST_DB_HOST" DB_PORT="$TEST_DB_PORT" DB_USER="$TEST_DB_USER" DB_PASSWORD="$TEST_DB_PASSWORD" python3 scripts/init_db.py --drop "$TEST_DB_NAME" > /dev/null 2>&1; then
         log_success "✅ Limpieza de base de datos de prueba completada"
     else
         log_warning "⚠️ No se pudo eliminar base de datos (puede no existir)"
@@ -225,7 +260,7 @@ create_test_database() {
     # Esto aplica el esquema automáticamente
     log_info "📦 Creando base de datos de prueba y aplicando esquema..."
     cd "$PROJECT_DIR"
-    if DB_NAME="$TEST_DB_NAME" python3 scripts/init_db.py --verbose > /dev/null 2>&1; then
+    if DB_NAME="$TEST_DB_NAME" DB_HOST="$TEST_DB_HOST" DB_PORT="$TEST_DB_PORT" DB_USER="$TEST_DB_USER" DB_PASSWORD="$TEST_DB_PASSWORD" python3 scripts/init_db.py --verbose; then
         log_success "✅ Base de datos de prueba creada con esquema"
     else
         log_error "❌ Error al crear base de datos de prueba"
@@ -312,6 +347,7 @@ main() {
     # Ejecutar pasos en orden
     check_prerequisites
     load_test_config
+    ensure_container_running
     wait_for_postgres
     create_test_database
     run_integration_tests

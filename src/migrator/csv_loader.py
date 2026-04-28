@@ -94,10 +94,13 @@ class CSVLoader:
         delimiter = config.get("source", {}).get("delimiter", ",")
         max_errors = config.get("validation", {}).get("max_errors_before_rollback", 100)
         strict_mode = config.get("validation", {}).get("strict_mode", False)
-        
+
+        # ■■■■■■■■■■■■■ Extraer solo columns del schema YAML si existe ■■■■■■■■■■■■■
+        columns_schema = schema.get('columns', schema) if isinstance(schema, dict) else schema
+
         # ■■■■■■■■■■■■■ Generar nombre de tabla temporal único ■■■■■■■■■■■■■
         temp_table = self._generate_temp_table_name(csv_path)
-        
+
         # ■■■■■■■■■■■■■ Crear tabla temporal con misma estructura que destino ■■■■■■■■■■■■■
         # Para evitar problemas de tipo durante la validación
         self._create_temp_table(temp_table, schema, db_connector)
@@ -106,7 +109,7 @@ class CSVLoader:
 
             # ■■■■■■■■■■■■■ Fase 1: Lectura y validación ■■■■■■■■■■■■■
             valid_rows, errors = self._read_and_validate_csv(
-                csv_path, schema, validators, encoding, delimiter, max_errors
+                csv_path, columns_schema, validators, encoding, delimiter, max_errors
             )
             
             # ■■■■■■■■■■■■■ Fail-fast si excede umbral de errores ■■■■■■■■■■■■■
@@ -279,45 +282,76 @@ class CSVLoader:
         return f"temp_{csv_name}_{timestamp}_{random_suffix}"
     
     def _create_temp_table(
-        self, 
-        temp_table: str, 
-        schema: Dict[str, Any], 
+        self,
+        temp_table: str,
+        schema: Dict[str, Any],
         db_connector: DBConnector
     ) -> None:
         """
         Crea tabla temporal con estructura del esquema.
-        
+
         Args:
             temp_table: Nombre de la tabla temporal a crear.
             schema: Diccionario con definición de columnas y tipos SQL.
+                     Puede tener estructura YAML (con 'columns') o directa.
             db_connector: Conector a base de datos para ejecutar CREATE.
-            
+
         Raises:
             Exception: Si falla la creación de la tabla temporal.
         """
 
+        # ■■■■■■■■■■■■■ Manejar estructura de schema YAML o directa ■■■■■■■■■■■■■
+        # Si el schema tiene clave 'columns', usar solo esa sección
+        if isinstance(schema, dict) and 'columns' in schema:
+            columns_dict = schema['columns']
+        else:
+            columns_dict = schema
+
+        # ■■■■■■■■■■■■■ Mapeo de tipos YAML a tipos SQL ■■■■■■■■■■■■■
+        type_mapping = {
+            'integer': 'INTEGER',
+            'string': 'TEXT',
+            'email': 'TEXT',
+            'phone': 'TEXT',
+            'datetime': 'TIMESTAMP',
+            'date': 'DATE',
+            'decimal': 'DECIMAL',
+            'boolean': 'BOOLEAN'
+        }
+
         # ■■■■■■■■■■■■■ Construcción dinámica de CREATE TABLE basada en schema ■■■■■■■■■■■■■
-        # para garantizar compatibilidad de tipos sin hardcodear SQL
-        
         columns_sql = []
-        for col_name, col_def in schema.items():
-            col_type = col_def.get("sql_type", "TEXT")
-            nullable = "" if col_def.get("required", False) else "NULL"
+        has_id = False
+        for col_name, col_def in columns_dict.items():
+            if col_name == 'id':
+                has_id = True
+            if isinstance(col_def, str):
+                # ▲▲▲▲▲▲ Caso simple: col_def es directamente el tipo SQL ▲▲▲▲▲▲
+                col_type = col_def
+                nullable = "NULL"
+            else:
+                # ▲▲▲▲▲▲ Caso YAML: col_def es un diccionario con propiedades ▲▲▲▲▲▲
+                yaml_type = col_def.get("type", "text")
+                col_type = type_mapping.get(yaml_type, "TEXT")
+                nullable = "" if col_def.get("required", False) else "NULL"
             columns_sql.append(f"{col_name} {col_type} {nullable}")
-        
+
+        # Agregar id SERIAL PRIMARY KEY solo si no existe en el schema
+        if not has_id:
+            columns_sql.insert(0, "id SERIAL PRIMARY KEY")
+
         create_sql = f"""
             CREATE TEMPORARY TABLE {temp_table} (
-                id SERIAL PRIMARY KEY,
                 {', '.join(columns_sql)}
             )
         """
-        
+
         try:
             cursor = db_connector.connection.cursor()
             cursor.execute(create_sql)
             db_connector.commit()
             self._logger.info(f"Tabla temporal {temp_table} creada")
-            
+
         except Exception as e:
             self._logger.error(f"Error creando tabla temporal {temp_table}: {e}")
             raise

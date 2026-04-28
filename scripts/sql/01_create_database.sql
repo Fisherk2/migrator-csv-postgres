@@ -7,8 +7,8 @@
 -- 🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙🮙🮘🮙
 
 -- ■■■■■■■■■■■■■ Establecer variables de sesión para creación consistente de base de datos ■■■■■■■■■■■■■
-SET client_encoding = 'UTF8';
-SET client_min_messages = warning;
+-- SET client_encoding = 'UTF8';
+-- SET client_min_messages = warning;
 
 -- ■■■■■■■■■■■■ Crear base de datos con encoding UTF8 y locale apropiado ■■■■■■■■■■■■
 -- Usando template0 para evitar copiar configuraciones de base de datos existentes
@@ -29,7 +29,7 @@ SET client_min_messages = warning;
 --END $$;
 
 -- ■■■■■■■■■■■ Crear base de datos (solo si no existe) ■■■■■■■■■■■■■■■■
--- DECISIÓN: Usar placeholders {{DB_NAME}} y {{DB_USER}} para parametrización
+-- DECISIÓN: Comandos separados por punto y coma para ejecución individual en Python
 -- Python reemplaza estos placeholders con valores de variables de entorno
 CREATE DATABASE {{DB_NAME}}
     WITH
@@ -41,12 +41,8 @@ CREATE DATABASE {{DB_NAME}}
     CONNECTION LIMIT = -1
     TEMPLATE = template0;
 
--- ■■■■■■■■■■■■ Otorgar permisos básicos al usuario de la variable de entorno ■■■■■■■■■■■■
--- Esto asegura que la base de datos sea accesible para scripts de migración subsecuentes
 GRANT ALL PRIVILEGES ON DATABASE {{DB_NAME}} TO {{DB_USER}};
 
--- ■■■■■■■■■■■■ Proporcionar instrucciones de uso para desarrolladores ■■■■■■■■■■■■
--- Este comentario sirve como documentación para miembros del equipo
 COMMENT ON DATABASE {{DB_NAME}} IS 'Base de datos principal de la aplicación - creada con create_database.sql';
 
 -- ■■■■■■■■■■■■■ Desconectarse de la nueva base de datos para retornar al estado de conexión original ■■■■■■■■■■■■■
