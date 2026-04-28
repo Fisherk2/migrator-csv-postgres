@@ -1,0 +1,6 @@
+id,name,email,phone,created_at,updated_at
+,John Doe,john.doe@example.com,5512345678,,
+,Jane Smith,jane.smith@gmail.com,ABC-DEF-GHI,,
+,Carlos García,carlos.garcia@yahoo.com,123,,
+,Maria López,maria.lopez@hotmail.com,+99999999999999999999,,
+,Robert Johnson,robert.j@outlook.com,555,,
