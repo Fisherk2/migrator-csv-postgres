@@ -209,24 +209,26 @@ wait_for_postgres() {
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 create_test_database() {
-    log_info "🗄️ Creando base de datos de prueba: $TEST_DB_NAME"
-    
-    # DECISIÓN: Usar DB_USER (no TEST_DB_USER) para crear BD
-    # El usuario de mantenimiento suele tener más permisos
-    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "CREATE DATABASE $TEST_DB_NAME;" 2>&1; then
-        log_success "✅ Base de datos de prueba creada"
+    log_info "🗄️ Preparando base de datos de prueba: $TEST_DB_NAME"
+
+    # DECISIÓN: Eliminar base de datos de prueba si existe para garantizar limpieza
+    # Esto hace el proceso idempotente y reproducible
+    log_info "🧹 Eliminando base de datos de prueba previa (si existe)..."
+    cd "$PROJECT_DIR"
+    if python3 scripts/init_db.py --drop "$TEST_DB_NAME" > /dev/null 2>&1; then
+        log_success "✅ Limpieza de base de datos de prueba completada"
     else
-        # Si ya existe, es aceptable (idempotencia)
-        log_warning "⚠️ Base de datos $TEST_DB_NAME ya existe, reutilizando"
+        log_warning "⚠️ No se pudo eliminar base de datos (puede no existir)"
     fi
-    
-    # Aplicar esquema a base de datos de prueba
-    log_info "📦 Aplicando esquema a base de datos de prueba..."
+
+    # DECISIÓN: Usar init_db.py con DB_NAME=TEST_DB_NAME para crear BD de prueba
+    # Esto aplica el esquema automáticamente
+    log_info "📦 Creando base de datos de prueba y aplicando esquema..."
     cd "$PROJECT_DIR"
     if DB_NAME="$TEST_DB_NAME" python3 scripts/init_db.py --verbose > /dev/null 2>&1; then
-        log_success "✅ Esquema aplicado a base de datos de prueba"
+        log_success "✅ Base de datos de prueba creada con esquema"
     else
-        log_error "❌ Error al aplicar esquema a base de datos de prueba"
+        log_error "❌ Error al crear base de datos de prueba"
         exit 2
     fi
 }

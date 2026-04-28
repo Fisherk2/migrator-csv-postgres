@@ -24,8 +24,8 @@ from src.migrator.db_connector import DBConnector
 from src.migrator.csv_loader import CSVLoader
 from src.migrator.error_handler import ErrorHandler, MigrationError
 from src.migrator.report_generator import ReportGenerator
-from src.validators.custom.email_validator import validate_email
-from src.validators.custom.phone_validator import validate_phone
+from src.validators.custom.email_validator import validate_email_format
+from src.validators.custom.phone_validator import validate_phone_format
 
 
 # ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
@@ -144,9 +144,9 @@ class IntegrationTestRunner:
             col_type = col_def.get('type')
             
             if col_type == 'email':
-                validators[col_name] = validate_email
+                validators[col_name] = validate_email_format
             elif col_type == 'phone':
-                validators[col_name] = validate_phone
+                validators[col_name] = validate_phone_format
         
         return validators
     

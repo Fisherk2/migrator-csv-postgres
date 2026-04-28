@@ -67,11 +67,11 @@ class DatabaseInitializer:
     def _create_database(self, conn: connection) -> bool:
         """
         Ejecuta el script de creación de base de datos con autocommit=True.
-        
+
         DECISIÓN: Reemplazar placeholders {{DB_NAME}} y {{DB_USER}} con valores
         de variables de entorno antes de ejecutar el SQL. PostgreSQL no permite
         parámetros en CREATE DATABASE, por lo que usamos string formatting seguro.
-        
+
         Returns:
             True si éxito, False si fallo
         """
@@ -79,36 +79,82 @@ class DatabaseInitializer:
         if not script_path.exists():
             logger.error("Script 01_create_database.sql no encontrado")
             return False
-        
+
         try:
             # Configurar autocommit para CREATE DATABASE
             conn.autocommit = True
             logger.info("Usando autocommit=True para CREATE DATABASE")
-            
+
             with conn.cursor() as cursor:
                 logger.info("Ejecutando creación de base de datos desde 01_create_database.sql")
-                
+
                 # Leer script SQL
                 with open(script_path, 'r', encoding='utf-8') as f:
                     sql_content = f.read()
-                
+
                 # DECISIÓN DE DISEÑO: Reemplazar placeholders con valores de configuración
                 # Usamos str.replace() en lugar de format() para evitar conflictos con sintaxis SQL
                 sql_content = sql_content.replace('{{DB_NAME}}', self.config.db_name)
                 sql_content = sql_content.replace('{{DB_USER}}', self.config.user)
-                
+
                 logger.info(f"Creando base de datos: {self.config.db_name} con owner: {self.config.user}")
-                
+
                 cursor.execute(sql_content)
-                
+
                 logger.info("Completado: creación de base de datos")
                 return True
-                
+
         except DatabaseError as e:
             logger.error(f"Error en creación de base de datos: {e}")
             return False
         except Exception as e:
             logger.error(f"Error inesperado en creación de base de datos: {e}")
+            return False
+
+    def _drop_database(self, conn: connection, db_name: str) -> bool:
+        """
+        Ejecuta el script de eliminación de base de datos con autocommit=True.
+
+        DECISIÓN: Reemplazar placeholder {{DB_NAME}} con el nombre de BD especificado.
+        PostgreSQL no permite parámetros en DROP DATABASE, por lo que usamos string formatting seguro.
+
+        Args:
+            conn: Conexión a base de datos postgres.
+            db_name: Nombre de la base de datos a eliminar.
+
+        Returns:
+            True si éxito o si no existe, False si fallo.
+        """
+        script_path = self.sql_scripts_dir / "drop_database.sql"
+        if not script_path.exists():
+            logger.error("Script drop_database.sql no encontrado")
+            return False
+
+        try:
+            # Configurar autocommit para DROP DATABASE
+            conn.autocommit = True
+            logger.info("Usando autocommit=True para DROP DATABASE")
+
+            with conn.cursor() as cursor:
+                logger.info(f"Ejecutando eliminación de base de datos: {db_name}")
+
+                # Leer script SQL
+                with open(script_path, 'r', encoding='utf-8') as f:
+                    sql_content = f.read()
+
+                # DECISIÓN DE DISEÑO: Reemplazar placeholder con nombre de BD especificado
+                sql_content = sql_content.replace('{{DB_NAME}}', db_name)
+
+                cursor.execute(sql_content)
+
+                logger.info(f"Completado: eliminación de base de datos {db_name}")
+                return True
+
+        except DatabaseError as e:
+            logger.error(f"Error en eliminación de base de datos: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Error inesperado en eliminación de base de datos: {e}")
             return False
     
     def _execute_sql_file(
@@ -164,64 +210,100 @@ class DatabaseInitializer:
             logger.error(f"No se puede conectar a {dbname}: {e}")
             raise
     
+    def drop_database(self, db_name: str) -> bool:
+        """
+        Elimina una base de datos específica usando el script drop_database.sql.
+
+        DECISIÓN: Función pública para permitir limpieza automatizada de bases de datos de prueba.
+        Útil en scripts de integración que necesitan limpiar antes de crear.
+
+        Args:
+            db_name: Nombre de la base de datos a eliminar.
+
+        Returns:
+            True si éxito, False si fallo.
+        """
+        conn = None
+
+        try:
+            # Conectar a postgres para poder eliminar otras bases de datos
+            conn = self._create_connection("postgres")
+
+            # Ejecutar script de eliminación
+            if not self._drop_database(conn, db_name):
+                return False
+
+            logger.info(f"Base de datos {db_name} eliminada exitosamente")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error fatal en eliminación de base de datos: {e}")
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except:
+                    pass  # Ignorar errores al cerrar
+
     def initialize_database(self) -> bool:
         """
         Orquesta la inicialización completa usando dual-connection pattern.
-        
+
         Returns:
             True si todos los scripts se ejecutaron correctamente
         """
         conn_maintenance = None
         conn_target = None
-        
+
         try:
             # ■■■■■■■■■■■■■ PASO 1: Conectar a BD mantenimiento para crear BD ■■■■■■■■■■■■■
             logger.info("=== FASE 1: Creación de base de datos ===")
             conn_maintenance = self._create_connection("postgres")
-            
+
             # ▲▲▲▲▲ Verificar si base de datos ya existe ▲▲▲▲▲▲
             with conn_maintenance.cursor() as cursor:
                 cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (self.config.db_name,))
                 db_exists = cursor.fetchone()
-                
+
                 if db_exists:
                     logger.info(f"Base de datos {self.config.db_name} ya existe. Omitiendo creación.")
                 else:
                     logger.info(f"Creando base de datos {self.config.db_name}...")
-                    
+
                     # ▲▲▲▲▲▲ Ejecutar script 01_create_database.sql con función exclusiva ▲▲▲▲▲▲
                     if not self._create_database(conn_maintenance):
                         return False
-                    
+
                     # ▲▲▲▲▲▲ Mensaje de finalización de creación de BD ▲▲▲▲▲▲
                     logger.info(f"Script de creación de base de datos completado. Base de datos '{self.config.db_name}' está lista para migraciones.")
-            
+
             # ▲▲▲▲▲▲ Cerrar conexión de mantenimiento ▲▲▲▲▲▲
             conn_maintenance.close()
             conn_maintenance = None
-            
+
             # ■■■■■■■■■■■■■ PASO 2: Conectar a BD target para schema y datos ■■■■■■■■■■■■■
             logger.info("=== FASE 2: Configuración de esquema y datos ===")
             conn_target = self._create_connection(self.config.db_name)
-            
+
             # ▲▲▲▲▲▲ Ejecutar scripts restantes en secuencia ▲▲▲▲▲▲
             remaining_scripts = [
                 (self.scripts[1], "creación de esquema"),
                 (self.scripts[2], "creación de índices")
             ]
-            
+
             for script_name, description in remaining_scripts:
                 if not self._execute_sql_file(conn_target, script_name, description):
                     return False
-            
+
             logger.info("=== Inicialización completada exitosamente ===")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error fatal en inicialización: {e}")
             return False
         finally:
-            
+
             # ▲▲▲▲▲▲ Asegurar cierre de conexiones (solo si existen) ▲▲▲▲▲▲
             if conn_maintenance is not None:
                 try:
@@ -245,27 +327,35 @@ Ejemplos:
   %(prog)s                          # Usa .env por defecto
   %(prog)s --env-file .env.local     # Archivo .env específico
   %(prog)s --config config/dev.yaml # Configuración YAML (futuro)
+  %(prog)s --drop migrator_test     # Elimina base de datos específica
         """
     )
-    
+
     parser.add_argument(
         '--env-file',
         type=str,
         help='Archivo .env con variables de conexión (default: .env)'
     )
-    
+
     parser.add_argument(
         '--config',
         type=str,
         help='Archivo YAML de configuración (no implementado aún)'
     )
-    
+
     parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Modo verboso (DEBUG logging)'
     )
-    
+
+    parser.add_argument(
+        '--drop',
+        type=str,
+        metavar='DB_NAME',
+        help='Elimina la base de datos especificada (modo destructivo)'
+    )
+
     return parser.parse_args()
 
 
@@ -293,23 +383,29 @@ def main() -> int:
     """Función principal del inicializador."""
     try:
         args = parse_arguments()
-        
+
         # ■■■■■■■■■■■■■ Configurar nivel de logging ■■■■■■■■■■■■■
         if args.verbose:
             logging.getLogger().setLevel(logging.DEBUG)
-        
+
         # ■■■■■■■■■■■■■ Cargar variables de entorno ■■■■■■■■■■■■■
         load_env_file(args.env_file)
-        
+
         # ■■■■■■■■■■■■■ Validar configuración ■■■■■■■■■■■■■
         config = DatabaseConfig()
-        
-        # ■■■■■■■■■■■■■ Ejecutar inicialización ■■■■■■■■■■■■■
+
+        # ■■■■■■■■■■■■■ Modo drop: eliminar base de datos específica ■■■■■■■■■■■■■
+        if args.drop:
+            initializer = DatabaseInitializer(config)
+            success = initializer.drop_database(args.drop)
+            return 0 if success else 1
+
+        # ■■■■■■■■■■■■■ Ejecutar inicialización normal ■■■■■■■■■■■■■
         initializer = DatabaseInitializer(config)
         success = initializer.initialize_database()
-        
+
         return 0 if success else 1
-        
+
     except KeyboardInterrupt:
         logger.info("Inicialización cancelada por usuario")
         return 130
