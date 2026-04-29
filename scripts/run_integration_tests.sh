@@ -35,7 +35,7 @@ readonly PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly CONFIG_FILE="$PROJECT_DIR/.env"
 readonly COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
 readonly CONTAINER_NAME="migrator_postgres_dev"
-readonly PYTHON_SCRIPT="$PROJECT_DIR/tests/integration/test_integration.py"
+readonly PYTHON_SCRIPT="$PROJECT_DIR/tests/test_integration.py"
 
 # Variables de contadores
 TESTS_TOTAL=0
@@ -315,17 +315,17 @@ cleanup_test_database() {
     fi
     
     log_info "🧹 Limpiando base de datos de prueba: $TEST_DB_NAME"
-    
+
     # DECISIÓN: Terminar conexiones activas antes de DROP
     # Evita "database is being accessed by other users"
-    PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "
-        SELECT pg_terminate_backend(pid) 
-        FROM pg_stat_activity 
+    PGPASSWORD="$TEST_DB_PASSWORD" psql -h "$TEST_DB_HOST" -p "$TEST_DB_PORT" -U "$TEST_DB_USER" -d postgres -c "
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
         WHERE datname = '$TEST_DB_NAME' AND pid <> pg_backend_pid();
     " 2>/dev/null || true
-    
+
     # Eliminar base de datos
-    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "DROP DATABASE $TEST_DB_NAME;" 2>&1; then
+    if PGPASSWORD="$TEST_DB_PASSWORD" psql -h "$TEST_DB_HOST" -p "$TEST_DB_PORT" -U "$TEST_DB_USER" -d postgres -c "DROP DATABASE $TEST_DB_NAME;" 2>&1; then
         log_success "✅ Base de datos de prueba eliminada"
     else
         log_warning "⚠️ No se pudo eliminar base de datos de prueba (puede no existir)"
@@ -353,7 +353,7 @@ main() {
     run_integration_tests
     
     # Limpieza siempre se ejecuta (incluso si tests fallan)
-    cleanup_test_database
+    cleanup_test_database || true
     
     echo "============================================================================"
     

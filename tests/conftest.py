@@ -243,25 +243,25 @@ def sample_invalid_csv_data(invalid_csv_path: Path) -> str:
 def test_db_config() -> Optional[dict]:
     """
     Configuración de base de datos para tests de integración.
-    
+
     Scope: session - Se comparte entre todos los tests de integración.
-    
+
     DECISIÓN: Leer desde variables de entorno TEST_* o usar valores por defecto
     alineados con .env.example. Retorna None si TEST_DB_AVAILABLE=false.
-    
+
     Valores por defecto alineados con .env.example:
     - TEST_DB_HOST: localhost (igual que DB_HOST)
     - TEST_DB_NAME: migrator_test (variante de DB_NAME para tests)
     - TEST_DB_USER: test_user (variante de DB_USER para tests)
     - TEST_DB_PASSWORD: test_password (valor seguro para contenedor local)
     - TEST_DB_PORT: 5432 (igual que DB_PORT)
-    
+
     Returns:
         Diccionario con configuración de conexión o None si tests no disponibles.
     """
     if os.getenv("TEST_DB_AVAILABLE", "true").lower() == "false":
         return None
-    
+
     return {
         "host": os.getenv("TEST_DB_HOST", "localhost"),
         "dbname": os.getenv("TEST_DB_NAME", "migrator_test"),

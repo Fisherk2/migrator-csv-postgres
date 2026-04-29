@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 # ▏▎▍▌▋▊▉▉▉▉▉▉▉▉ Agregar src al path para importar módulos del proyecto ▉▉▉▉▉▉▉▉▉▊▋▌▍▎▏
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.migrator.db_connector import DBConnector
 from src.migrator.csv_loader import CSVLoader
@@ -50,10 +50,10 @@ class TestConfig:
 
         # ■■■■■■■■■■■■■ Usar TEST_* con fallback a valores seguros ■■■■■■■■■■■■■
         self.host = os.getenv('TEST_DB_HOST', 'localhost')
-        self.port = int(os.getenv('TEST_DB_PORT', '5432'))
+        self.port = int(os.getenv('TEST_DB_PORT', '5433'))
         self.dbname = os.getenv('TEST_DB_NAME', 'migrator_test')
-        self.user = os.getenv('TEST_DB_USER', 'test_user')
-        self.password = os.getenv('TEST_DB_PASSWORD', 'test_password')
+        self.user = os.getenv('TEST_DB_USER', 'migrator_user')
+        self.password = os.getenv('TEST_DB_PASSWORD', 'dev_password_123')
         
         # ■■■■■■■■■■■■■ Usar TEST_* con fallback a valores segurosValidar que no apunte a producción
         if self.dbname == 'migrator_ecommerce':
@@ -109,10 +109,10 @@ class IntegrationTestRunner:
         self.report_generator = ReportGenerator()
 
         # ■■■■■■■■■■■■■ Usar fixtures desde test/fixtures/ ■■■■■■■■■■■■■
-        self.fixtures_dir = Path(__file__).parent.parent / 'fixtures'
+        self.fixtures_dir = Path(__file__).parent / 'fixtures'
 
         # ■■■■■■■■■■■■■ Usar schema YAML existente ■■■■■■■■■■■■■
-        self.schema_dir = Path(__file__).parent.parent.parent / 'config' / 'schema_examples'
+        self.schema_dir = Path(__file__).parent.parent / 'config' / 'schema_examples'
 
     def _load_migration_config(self) -> Dict[str, Any]:
         """
@@ -121,7 +121,7 @@ class IntegrationTestRunner:
         Returns:
             Diccionario con configuración de migración.
         """
-        config_path = Path(__file__).parent.parent.parent / 'config' / 'default_migration.yaml'
+        config_path = Path(__file__).parent.parent / 'config' / 'default_migration.yaml'
         if not config_path.exists():
             logger.warning(f"Configuración YAML no encontrada: {config_path}, usando defaults")
             return {'validation': {'max_errors_before_rollback': 100}}
@@ -238,9 +238,11 @@ class IntegrationTestRunner:
                 cursor.execute(f"SELECT COUNT(*) FROM {temp_table}")
                 result['actual_imported'] = cursor.fetchone()[0]
 
-            # ▲▲▲▲▲▲ Calcular filas rechazadas basándose en errores de validación ▲▲▲▲▲▲
-            # El número de errores corresponde al número de filas rechazadas
-            result['actual_rejected'] = len(result['errors'])
+            # ▲▲▲▲▲▲ Calcular filas rechazadas basándose en el total de filas del CSV ▲▲▲▲▲▲
+            # Leer el CSV para contar el total de filas (excluyendo encabezado)
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                total_rows = sum(1 for _ in f) - 1  # -1 para excluir encabezado
+            result['actual_rejected'] = total_rows - result['actual_imported']
 
             # ▲▲▲▲▲▲ Validar resultados ▲▲▲▲▲▲
             result['success'] = (
@@ -299,9 +301,9 @@ class IntegrationTestRunner:
         test_cases = [
             # (csv_file, table_name, expected_imported, expected_rejected)
             ('customers_valid.csv', 'customers', 10, 0),
-            ('customers_invalid_email.csv', 'customers', 0, 0),  # No hay filas válidas
-            ('customers_invalid_phone.csv', 'customers', 0, 0),  # No hay filas válidas
-            ('customers_mixed.csv', 'customers', 7, 0),  # 7 válidas, 5 errores
+            ('customers_invalid_email.csv', 'customers', 0, 5),  # 5 errores de validación
+            ('customers_invalid_phone.csv', 'customers', 0, 5),  # 5 errores de validación
+            ('customers_mixed.csv', 'customers', 7, 5),  # 7 válidas, 5 errores
         ]
         
         results = []

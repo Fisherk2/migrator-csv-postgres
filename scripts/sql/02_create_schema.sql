@@ -96,10 +96,19 @@ CREATE TABLE IF NOT EXISTS public.orders (
         ON DELETE RESTRICT
 );
 
--- Constraint para valores válidos de status
-ALTER TABLE public.orders 
-ADD CONSTRAINT chk_orders_status 
-CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled'));
+-- Constraint para valores válidos de status (idempotente)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_orders_status'
+        AND conrelid = 'public.orders'::regclass
+    ) THEN
+        ALTER TABLE public.orders
+        ADD CONSTRAINT chk_orders_status
+        CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled'));
+    END IF;
+END $$;
 
 -- Comentarios de negocio para orders
 COMMENT ON TABLE public.orders IS 'Órdenes de compra del e-commerce';
@@ -138,8 +147,17 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Trigger para customers.updated_at
-CREATE TRIGGER update_customers_updated_at 
-    BEFORE UPDATE ON public.customers 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
+-- Trigger para customers.updated_at (idempotente)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgname = 'update_customers_updated_at'
+        AND tgrelid = 'public.customers'::regclass
+    ) THEN
+        CREATE TRIGGER update_customers_updated_at
+            BEFORE UPDATE ON public.customers
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
