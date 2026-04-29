@@ -401,7 +401,7 @@ Agradecemos a todos los contribuidores que han hecho este proyecto posible:
 
 - **Issues**: [GitHub Issues](https://github.com/Fisherk2/migrator-csv-postgres/issues)
 - **Discusiones**: [GitHub Discussions](https://github.com/Fisherk2/migrator-csv-postgres/discussions)
-- **Email**: fisherk2@example.com
+- **Email**: dev@fisherk2.com
 
 ---
 
