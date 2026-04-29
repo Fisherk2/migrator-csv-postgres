@@ -76,7 +76,17 @@ Cada error sigue el formato: **Síntoma → Causa → Diagnóstico → Solución
 | `psycopg2.OperationalError: deadlock detected` | Dos transacciones esperando recursos mutuamente | `psql -h localhost -U migrator_user -d migrator_ecommerce -c "SELECT * FROM pg_stat_activity WHERE wait_event_type = 'Lock';"` | Identificar y matar una de las transacciones<br>Reordenar operaciones | Orden consistente de locks<br>Timeout de deadlock |
 | `TransactionRollbackError: Max errors exceeded (50)` | Umbral de errores en validación superado | Verificar logs de migración<br>`grep "ERROR" reports/migration_*.json` | Aumentar `max_errors_before_rollback` en config<br>Corregir datos de origen | Validación incremental<br>Tests de umbral de errores |
 
-### Categoría 6: Permisos y Seguridad
+### Categoría 6: Scripts de Pruebas y Testing
+
+| Síntoma | Causa Raíz | Comando de Diagnóstico | Solución | Prevención |
+|---------|-----------|------------------------|----------|------------|
+| `run_integration_tests.sh` exit code 1 con "TODAS LAS PRUEBAS PASARON" | TESTS_FAILED no se resetea correctamente | `echo $?` después de ejecutar script<br>Verificar lógica de contadores en script | Revisar lógica de contadores en run_integration_tests.sh<br>Asegurar reset de TESTS_FAILED antes de ejecutar | Tests unitarios de scripts de orquestación |
+| `pytest tests/integration/ -v -m integration` marca tests como skipped | Decorador `@pytest.mark.integration` no aplicado | `grep -r "@pytest.mark.integration" tests/integration/`<br>`pytest --collect-only tests/integration/` | Agregar `@pytest.mark.integration` a tests de integración<br>Verificar configuración en pytest.ini | Documentar uso de markers en guías de testing |
+| `verify_setup.sh` falla con "Container not running" | Contenedor Docker detenido o nombre incorrecto | `docker ps -a`<br>`docker inspect migrator_postgres_dev` | `docker compose up -d`<br>Verificar nombre de contenedor en docker-compose.yml | Healthcheck en verify_setup.sh |
+| `test_integration.py` no encuentra schema YAML | Rutas relativas incorrectas | `python -c "from pathlib import Path; print(Path(__file__).parent.parent / 'config')"` | Corregir rutas relativas en test_integration.py<br>Usar Path(__file__).parent.parent / 'config' | Tests de path resolution |
+| `run_schema.sh` falla con "Database already exists" | Base de datos de prueba ya existe | `psql -h localhost -U postgres -c "\l"`<br>`docker exec migrator_postgres_dev psql -U postgres -c "\l"` | Usar `scripts/init_db.py --drop migrator_test`<br>Limpiar base de datos antes de ejecutar | Cleanup automático en scripts |
+
+### Categoría 7: Permisos y Seguridad
 
 | Síntoma | Causa Raíz | Comando de Diagnóstico | Solución | Prevención |
 |---------|-----------|------------------------|----------|------------|

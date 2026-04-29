@@ -1,6 +1,6 @@
 # Project Context: Migrador CSV → PostgreSQL
 
-## 🎯 Propósito y Alcance (MVP)
+## 🎯 Propósito y Alcance
 
 > [!SUMMARY]
 > **Objetivo**: Herramienta CLI que migra datos CSV → PostgreSQL reutilizando validadores del proyecto `auditor-de-calidad-de-datos`, generando reportes de errores accionables.
@@ -9,12 +9,14 @@
 **Proceso**: Validación tipada + reglas de negocio + ingesta atómica  
 **Salida**: Datos en PostgreSQL + reporte JSON/texto con errores y sugerencias
 
+**Estado Actual**: Activo - MVP implementado con pruebas funcionando
+
 **Criterios de éxito MVP**:
-- [ ] ✅ Migración de 1000 filas en <5 minutos
-- [ ] ✅ Reuso funcional de 3+ validadores del auditor
-- [ ] ✅ Reporte con conteo: importados/rechazados + sugerencias
-- [ ] ✅ Rollback automático ante errores críticos
-- [ ] ✅ Cero dependencias no-open-source
+- [x] ✅ Migración de 1000 filas en <5 minutos
+- [x] ✅ Reuso funcional de 3+ validadores del auditor
+- [x] ✅ Reporte con conteo: importados/rechazados + sugerencias
+- [x] ✅ Rollback automático ante errores críticos
+- [x] ✅ Cero dependencias no-open-source
 
 ## 📋 Requisitos Modularizados
 

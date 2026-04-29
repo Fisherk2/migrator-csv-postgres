@@ -44,14 +44,16 @@ git checkout -b feature/nombre-de-tu-feature
 ### 3. Desarrollo y Testing
 ```bash
 # Instalar dependencias de desarrollo
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 
-# Ejecutar tests locales
-pytest
-pytest test/integration/ -m integration
+# Ejecutar tests locales (estrategia en 4 fases)
+./scripts/verify_setup.sh
+python3 -m pytest tests/unit/ -v
+./scripts/run_schema.sh && pytest tests/integration/ -v -m integration
+./scripts/run_integration_tests.sh --verbose
 
 # Formatear código
-black src/ test/
+black src/ tests/
 ```
 
 ### 4. Pull Request
@@ -81,10 +83,13 @@ pip install -r requirements-dev.txt
 
 ### Base de Datos para Tests
 ```bash
-# Usar Docker Compose
-docker-compose up -d postgres
+# Usar script automatizado (recomendado)
+./scripts/run_schema.sh
 
-# O configurar PostgreSQL local
+# Verificar entorno
+./scripts/verify_setup.sh
+
+# O configurar PostgreSQL local manualmente
 export TEST_DB_AVAILABLE=true
 export TEST_DB_HOST=localhost
 export TEST_DB_NAME=migrator_test
@@ -192,18 +197,21 @@ from src.utils.logger import get_logger
 
 ### Estructura de Tests
 ```bash
-test/
+tests/
 ├── conftest.py              # Fixtures compartidos
+├── test_integration.py      # Orquestador E2E (Python)
 ├── unit/                    # Tests unitarios
-│   ├── test_csv_loader.py
-│   ├── test_db_connector.py
-│   └── test_error_handler.py
+│   ├── test_error_handler.py
+│   ├── test_validators_reuse.py
+│   └── test_csv_loader.py
 ├── integration/             # Tests de integración
-│   ├── test_migration_flow.py
-│   └── test_db_connector.py
+│   ├── test_db_connector.py
+│   └── test_migration_flow.py
 └── fixtures/                # Datos de prueba
-    ├── valid_customers.csv
-    └── invalid_customers.csv
+    ├── customers_valid.csv
+    ├── customers_invalid_email.csv
+    ├── customers_invalid_phone.csv
+    └── customers_mixed.csv
 ```
 
 ### Ejemplo de Test
@@ -239,20 +247,23 @@ class TestCSVLoader:
 
 ### Ejecución de Tests
 ```bash
-# Todos los tests
-pytest
+# Estrategia en 4 fases (recomendado)
+./scripts/verify_setup.sh
+python3 -m pytest tests/unit/ -v
+./scripts/run_schema.sh && pytest tests/integration/ -v -m integration
+./scripts/run_integration_tests.sh --verbose
 
 # Unit tests solamente
-pytest test/unit/
+python3 -m pytest tests/unit/ -v
 
 # Integration tests
-pytest test/integration/ -m integration
+./scripts/run_schema.sh && pytest tests/integration/ -v -m integration
 
 # Con cobertura
 pytest --cov=src --cov-report=html --cov-fail-under=85
 
 # Tests específicos
-pytest test/unit/test_csv_loader.py::TestCSVLoader::test_load_valid_csv_succeeds -v
+pytest tests/unit/test_csv_loader.py::TestCSVLoader::test_load_valid_csv_succeeds -v
 ```
 
 ---

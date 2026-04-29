@@ -304,8 +304,9 @@ migrador-csv-postgres/
 │   ├── init_db.py
 │   ├── run_migration.py
 │   ├── run_schema.sh
-│   ├── update_submodule.sh
+│   ├── run_integration_tests.sh  # Orquestador E2E
 │   ├── verify_setup.sh
+│   ├── update_submodule.sh
 │   └── sql/
 │       ├── 01_create_database.sql
 │       ├── 02_create_schema.sql
@@ -313,21 +314,24 @@ migrador-csv-postgres/
 │       ├── drop_database.sql
 │       └── test_schema_operations.sql
 │
-├── test/                   # Tests
+├── tests/                  # Tests
 │   ├── conftest.py
 │   ├── fixtures/
-│   │   ├── valid_customers.csv
-│   │   ├── invalid_customers.csv
-│   │   └── test_schema.yaml
+│   │   ├── customers_valid.csv
+│   │   ├── customers_invalid_email.csv
+│   │   ├── customers_invalid_phone.csv
+│   │   └── customers_mixed.csv
 │   ├── unit/
-│   │   ├── test_csv_loader.py
 │   │   ├── test_error_handler.py
-│   │   └── test_validators_reuse.py
-│   └── integration/
-│       ├── test_db_connector.py
-│       └── test_migration_flow.py
+│   │   ├── test_validators_reuse.py
+│   │   └── test_csv_loader.py
+│   ├── integration/
+│   │   ├── test_db_connector.py
+│   │   └── test_migration_flow.py
+│   └── test_integration.py  # Orquestador E2E (Python)
 │
 ├── docs/                   # Documentación
+│   ├── TESTING_STRATEGY.md  # Estrategia de pruebas en 4 fases
 │   ├── ADR.md
 │   ├── ERD.md
 │   ├── POSTGRES_SETUP.md

@@ -9,23 +9,37 @@
        - Tests completos del pipeline
        - Base de datos real (Docker)
        - Archivos CSV reales
+       - Script: ./scripts/run_integration_tests.sh
     
     🔺🔺 Integration Tests  
        - Tests de componentes con BD
        - Fixtures compartidas
        - Rollback automático
+       - Comando: pytest tests/integration/ -v -m integration
     
     🔺🔺🔺 Unit Tests
        - Tests de funciones puras
        - Mocks para dependencias externas
        - Rápida ejecución
+       - Comando: python3 -m pytest tests/unit/ -v
 ```
+
+### Estrategia en 4 Fases
+
+El proyecto implementa una estrategia de testing escalonada documentada en `docs/TESTING_STRATEGY.md`:
+
+| Fase | Comando | Propósito | Tiempo Estimado |
+|------|---------|-----------|-----------------|
+| 1. Verificación de entorno | `./scripts/verify_setup.sh` | Validar integridad de BD y contenedor | <2 min |
+| 2. Unitarias con mocks | `python3 -m pytest tests/unit/ -v` | Validar lógica aislada sin dependencias externas | <1 min |
+| 3. Integración con pytest | `./scripts/run_schema.sh && pytest tests/integration/ -v -m integration` | Validar interacción de componentes con BD real | 5-10 min |
+| 4. E2E autónomo | `./scripts/run_integration_tests.sh` | Validación completa end-to-end con limpieza automática | 10-15 min |
 
 ### Frameworks y Herramientas
 
 - **pytest 7.0+**: Framework principal
 - **pytest-cov 4.0+**: Cobertura de código
-- **testcontainers-postgres**: BD real para tests de integración
+- **Docker Compose**: PostgreSQL 15-alpine para tests de integración
 - **unittest.mock**: Para aislar dependencias
 
 ## 📋 Tipos de Tests
