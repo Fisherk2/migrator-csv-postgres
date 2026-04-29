@@ -1,10 +1,30 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO: Manejo de errores
-AUTOR: Fisherk2
-FECHA: 2026-04-23
-DESCRIPCIÓN: Estructura centralizada de errores del pipeline de migración.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+"""Estructura centralizada de errores del pipeline de migración.
+
+Este módulo proporciona componentes para gestionar errores de migración
+de manera estructurada, incluyendo:
+
+- MigrationError: Dataclass inmutable para representar errores individuales
+- generate_correction_suggestion: Función heurística para sugerir correcciones
+- ErrorHandler: Gestor para acumular, registrar y reportar errores
+
+El diseño separa la acumulación de errores de la validación, permitiendo
+que el ErrorHandler solo se encargue de estructura y reporte.
+
+Example:
+    >>> from src.migrator.error_handler import ErrorHandler, MigrationError
+    >>>
+    >>> handler = ErrorHandler()
+    >>> error = MigrationError(
+    ...     row_num=1,
+    ...     column="email",
+    ...     field_type="email",
+    ...     invalid_value="test.com",
+    ...     reason="Formato de email inválido",
+    ...     suggestion="Agregar @: test@test.com"
+    ... )
+    >>> handler.add_error(error)
+    >>> assert handler.error_count == 1
+    >>> assert handler.has_critical_errors(100) == False
 """
 
 from __future__ import annotations
@@ -18,12 +38,11 @@ from src.utils.logger import get_logger
 
 @dataclass(frozen=True)
 class MigrationError:
-    """
-    Estructura inmutable para errores de migración.
-    
-    DECISIÓN: frozen=True garantiza inmutabilidad y previene efectos secundarios.
+    """Estructura inmutable para errores de migración.
+
+    frozen=True garantiza inmutabilidad y previene efectos secundarios.
     El timestamp se genera automáticamente para trazabilidad completa.
-    
+
     Attributes:
         row_num: Número de fila donde ocurrió el error (base 1).
         column: Nombre de la columna con el problema.
@@ -31,7 +50,19 @@ class MigrationError:
         invalid_value: Valor que causó el error.
         reason: Descripción del error en español para reportes.
         suggestion: Sugerencia accionable o None si no aplica.
-        timestamp: Momento exacto del error.
+        timestamp: Momento exacto del error (generado automáticamente).
+
+    Example:
+        >>> error = MigrationError(
+        ...     row_num=1,
+        ...     column="email",
+        ...     field_type="email",
+        ...     invalid_value="test.com",
+        ...     reason="Formato de email inválido",
+        ...     suggestion="Agregar @: test@test.com"
+        ... )
+        >>> assert error.row_num == 1
+        >>> assert error.column == "email"
     """
     row_num: int
     column: str
@@ -116,30 +147,46 @@ def generate_correction_suggestion(field_type: str, invalid_value: str) -> Optio
 
 
 class ErrorHandler:
-    """
-    Gestiona acumulación, logging y umbrales de errores de migración.
-    
-    DECISIÓN: Separar acumulación de validación. Solo estructura y reporta.
-    El logging usa el logger centralizado sin configurar handlers propios.
-    
+    """Gestiona acumulación, logging y umbrales de errores de migración.
+
+    Separa la acumulación de errores de la validación, permitiendo que
+    el ErrorHandler solo se encargue de estructura y reporte. El logging
+    usa el logger centralizado sin configurar handlers propios.
+
     Attributes:
-        errors: Lista inmutable de errores acumulados.
-        logger: Logger configurado para este módulo.
+        _errors: Lista interna de errores acumulados.
+        _logger: Logger configurado para este módulo.
+
+    Example:
+        >>> handler = ErrorHandler()
+        >>> error = MigrationError(1, "email", "email", "test.com", "Inválido", "Agregar @")
+        >>> handler.add_error(error)
+        >>> assert handler.error_count == 1
+        >>> handler.clear()
+        >>> assert handler.error_count == 0
     """
     
     def __init__(self) -> None:
-        """
-        Inicializa el handler con logger y lista vacía.
+        """Inicializa el handler con logger y lista vacía.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> assert handler.error_count == 0
         """
         self._errors: List[MigrationError] = []
         self._logger = get_logger(__name__)
     
     def add_error(self, error: MigrationError) -> None:
-        """
-        Agrega un error a la acumulación y registra el evento.
-        
+        """Agrega un error a la acumulación y registra el evento.
+
         Args:
             error: Instancia de MigrationError a agregar.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> error = MigrationError(1, "email", "email", "test.com", "Inválido")
+            >>> handler.add_error(error)
+            >>> assert handler.error_count == 1
         """
         self._errors.append(error)
         self._logger.warning(
@@ -147,13 +194,20 @@ class ErrorHandler:
         )
     
     def has_critical_errors(self, max_allowed: int) -> bool:
-        """
-        Verifica si se superó el umbral crítico de errores.
+        """Verifica si se superó el umbral crítico de errores.
 
         Args:
             max_allowed: Número máximo de errores permitidos.
+
         Returns:
             True si se superó el umbral, False en caso contrario.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> for i in range(50):
+            ...     handler.add_error(MigrationError(i, "col", "type", "val", "reason"))
+            >>> assert handler.has_critical_errors(100) == False
+            >>> assert handler.has_critical_errors(40) == True
         """
         if len(self._errors) >= max_allowed:
             self._logger.error(
@@ -163,8 +217,16 @@ class ErrorHandler:
         return False
     
     def log_accumulated(self) -> None:
-        """
-        Registra un resumen de errores acumulados.
+        """Registra un resumen de errores acumulados.
+
+        Agrupa errores por tipo (field_type:column) y registra el conteo
+        de cada categoría para facilitar el análisis de problemas.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> handler.add_error(MigrationError(1, "email", "email", "val", "reason"))
+            >>> handler.add_error(MigrationError(2, "email", "email", "val", "reason"))
+            >>> handler.log_accumulated()  # Registra resumen
         """
         if not self._errors:
             return
@@ -179,11 +241,20 @@ class ErrorHandler:
             self._logger.info(f"  {error_type}: {count}")
     
     def export_ready(self) -> List[Dict]:
-        """
-        Prepara errores para exportación JSON.
-        
+        """Prepara errores para exportación JSON.
+
+        Convierte la lista de MigrationError a diccionarios serializables
+        por json.dumps(), incluyendo todos los campos con timestamps en formato ISO.
+
         Returns:
             Lista de diccionarios serializables por json.dumps().
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> handler.add_error(MigrationError(1, "email", "email", "val", "reason"))
+            >>> export_data = handler.export_ready()
+            >>> assert isinstance(export_data, list)
+            >>> assert "timestamp" in export_data[0]
         """
         return [
             {
@@ -200,21 +271,49 @@ class ErrorHandler:
     
     @property
     def error_count(self) -> int:
-        """
-        Número total de errores acumulados.
+        """Número total de errores acumulados.
+
+        Returns:
+            Número de errores en la acumulación.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> assert handler.error_count == 0
+            >>> handler.add_error(MigrationError(1, "col", "type", "val", "reason"))
+            >>> assert handler.error_count == 1
         """
 
         return len(self._errors)
     
     @property
     def errors(self) -> List[MigrationError]:
-        """
-        Retorna copia de la lista de errores.
+        """Retorna copia de la lista de errores.
+
+        Retorna una copia para prevenir mutación externa de la lista interna.
+
+        Returns:
+            Copia de la lista de MigrationError acumulados.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> error = MigrationError(1, "col", "type", "val", "reason")
+            >>> handler.add_error(error)
+            >>> errors = handler.errors
+            >>> assert len(errors) == 1
         """
         return self._errors.copy()
 
     def clear(self) -> None:
-        """
-        Limpia la lista de errores acumulados.
+        """Limpia la lista de errores acumulados.
+
+        Útil para reutilizar la misma instancia de ErrorHandler en múltiples
+        migraciones o para pruebas.
+
+        Example:
+            >>> handler = ErrorHandler()
+            >>> handler.add_error(MigrationError(1, "col", "type", "val", "reason"))
+            >>> assert handler.error_count == 1
+            >>> handler.clear()
+            >>> assert handler.error_count == 0
         """
         self._errors.clear()

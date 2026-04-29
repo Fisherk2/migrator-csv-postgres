@@ -1,11 +1,31 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO:      Validador de Formato Email - Dominio Específico E-commerce.
-AUTOR:       Fisherk2
-FECHA:       2026-04-22
-DESCRIPCIÓN: Módulo de validación pura de formato de email según RFC 5322 simplificado.
+"""Validador de Formato Email - Dominio Específico E-commerce.
+
+Módulo de validación pura de formato de email según RFC 5322 simplificado.
 Independiente de infraestructura, optimizado para validación fila-a-fila.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+Características principales:
+- Validación RFC 5322 simplificada con regex compilada
+- Detección de typos comunes de dominio
+- Sugerencias automáticas de corrección
+- Validaciones de longitud y caracteres problemáticos
+- Función pura sin dependencias externas
+
+Example:
+    >>> from src.validators.custom.email_validator import validate_email_format
+    >>>
+    >>> # Email válido
+    >>> is_valid, error, suggestion = validate_email_format("user@example.com")
+    >>> print(is_valid)  # True
+    >>>
+    >>> # Email con typo común
+    >>> is_valid, error, suggestion = validate_email_format("user@gmial.com")
+    >>> print(is_valid)  # False
+    >>> print(suggestion)  # "user@gmail.com"
+    >>>
+    >>> # Email inválido
+    >>> is_valid, error, suggestion = validate_email_format("invalid-email")
+    >>> print(is_valid)  # False
+    >>> print(error)  # "Formato de email inválido. Se espera formato: usuario@dominio.com"
 """
 
 from __future__ import annotations
@@ -39,13 +59,24 @@ _COMMON_TYPOS = {
 
 
 def _generate_email_suggestion(email: str) -> Optional[str]:
-    """
-    Genera sugerencia basada en patrones comunes de error.
-    
+    """Genera sugerencia basada en patrones comunes de error.
+
+    Analiza el email para detectar typos comunes de dominio y sugerir
+    correcciones. No intenta corregir la parte local (username) por privacidad.
+
     Args:
         email: Email original con posible error.
+
     Returns:
         Sugerencia corregida o None si no hay patrón claro.
+
+    Example:
+        >>> _generate_email_suggestion("user@gmial.com")
+        'user@gmail.com'
+        >>> _generate_email_suggestion("user@domain")
+        'user@domain.com'
+        >>> _generate_email_suggestion("user@unknown.com")
+        None
     """
     if "@" not in email:
         return None
@@ -66,24 +97,33 @@ def _generate_email_suggestion(email: str) -> Optional[str]:
 
 
 def validate_email_format(value: Optional[str]) -> Tuple[bool, str, Optional[str]]:
-    """
-    Valida formato de email RFC 5322 simplificado con sugerencias.
-    
+    """Valida formato de email RFC 5322 simplificado con sugerencias.
+
     Función pura que valida formato y proporciona feedback accionable.
-    
+    Realiza validaciones exhaustivas incluyendo caracteres problemáticos,
+    longitud máxima, y detección de typos comunes de dominio.
+
     Args:
         value: Email a validar o None.
+
     Returns:
         Tupla (es_válido, mensaje_error, sugerencia_o_None):
         - es_válido: True si el formato es correcto
         - mensaje_error: Mensaje descriptivo en español
         - sugerencia_o_None: Sugerencia específica o None
-    Examples:
+
+    Example:
         >>> result = validate_email_format("usuario@gmial.com")
-        >>> print(result)  # (False, "Formato de email inválido", "usuario@gmail.com")
+        >>> print(result)  # (False, "Formato de email inválido. ¿Quisiste decir 'usuario@gmail.com'?", "usuario@gmail.com")
         
         >>> result = validate_email_format("usuario@dominio.com")
         >>> print(result)  # (True, "", None)
+        
+        >>> result = validate_email_format(None)
+        >>> print(result)  # (False, "Email es requerido", None)
+        
+        >>> result = validate_email_format("user@domain")
+        >>> print(result)  # (False, "Formato de email inválido. ¿Quisiste decir 'user@domain.com'?", "user@domain.com")
     """
     # ■■■■■■■■■■■■■ Manejo defensivo de valores nulos/vacíos ■■■■■■■■■■■■■
     if value is None:

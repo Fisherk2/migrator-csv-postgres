@@ -1,10 +1,35 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO:      CSVLoader - Pipeline de Ingestión de Datos
-AUTOR:       Fisherk2
-FECHA:       2026-04-23
-DESCRIPCIÓN: Orquesta lectura, validación e ingestión CSV a PostgreSQL.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+"""Orquestador de carga CSV con validación delegada y COPY optimizado.
+
+Este módulo implementa el pipeline completo de ingestión de datos CSV a PostgreSQL:
+- Lectura de archivos CSV con configuración de codificación y delimitadores
+- Validación fila-a-fila usando validadores inyectados (Strategy Pattern)
+- Ingestión optimizada usando COPY FROM con buffer en memoria
+- Validación de constraints en base de datos (unicidad, foreign keys)
+- Transferencia atómica con rollback en caso de errores
+
+El módulo sigue el Principio de Inversión de Dependencias recibiendo
+DBConnector y validadores como dependencias inyectadas.
+
+Example:
+    >>> from src.migrator.csv_loader import CSVLoader
+    >>> from src.migrator.db_connector import DBConnector
+    >>>
+    >>> loader = CSVLoader()
+    >>> db = DBConnector(host="localhost", user="postgres", password="secret", database="mydb")
+    >>> db.connect()
+    >>>
+    >>> schema = {"id": "INTEGER", "name": "VARCHAR(100)", "email": "TEXT"}
+    >>> validators = {"email": lambda v: (bool(re.match(r"[^@]+@[^@]+", v)), "Email inválido", "ejemplo@dominio.com")}
+    >>>
+    >>> temp_table = loader.load_csv_to_temp_table(
+    ...     csv_path="data/customers.csv",
+    ...     schema=schema,
+    ...     validators=validators,
+    ...     db_connector=db
+    ... )
+    >>>
+    >>> stats = loader.validate_and_transfer(temp_table, "customers", schema, db)
+    >>> print(f"Importados: {stats['imported']}, Rechazados: {stats['rejected']}")
 """
 
 from __future__ import annotations
@@ -21,19 +46,45 @@ from src.migrator.db_connector import DBConnector
 
 
 class CSVLoader:
-    """
-    Orquestador de carga CSV con validación delegada y COPY optimizado.
-    
+    """Orquestador de carga CSV con validación delegada y COPY optimizado.
+
     Coordina el pipeline completo: lectura → validación → buffering → ingestión.
-    Sigue Principio de Inversión de Dependencias recibiendo DBConnector y validadores.
+    Sigue el Principio de Inversión de Dependencias recibiendo DBConnector
+    y validadores como dependencias inyectadas.
+
+    El flujo de carga es:
+    1. Validar acceso al archivo CSV
+    2. Generar nombre único para tabla temporal
+    3. Crear tabla temporal con estructura del esquema
+    4. Leer y validar CSV fila-a-fila
+    5. Ingestar filas válidas usando COPY FROM
+    6. Validar constraints en base de datos
+    7. Transferir a tabla destino o rollback
+
+    Attributes:
+        _logger: Logger configurado para este módulo.
+
+    Example:
+        >>> loader = CSVLoader()
+        >>> temp_table = loader.load_csv_to_temp_table(
+        ...     csv_path="data.csv",
+        ...     schema={"name": "TEXT", "email": "TEXT"},
+        ...     validators={},
+        ...     db_connector=db
+        ... )
     """
     
     def __init__(self, logger: Optional[logging.Logger] = None) -> None:
-        """
-        Inicializa el loader con logger configurado.
-        
+        """Inicializa el loader con logger configurado.
+
         Args:
-            logger: Logger opcional, usa __name__ si no se proporciona.
+            logger: Logger opcional. Si no se proporciona, usa
+                logging.getLogger(__name__).
+
+        Example:
+            >>> import logging
+            >>> logger = logging.getLogger("custom")
+            >>> loader = CSVLoader(logger=logger)
         """
         self._logger = logger or logging.getLogger(__name__)
     
@@ -240,14 +291,21 @@ class CSVLoader:
     
     def _validate_file_access(self, csv_path: str) -> None:
         """Valida existencia y permisos del archivo CSV.
-        
+
+        Realiza validaciones de seguridad antes de intentar leer el archivo
+        para proporcionar mensajes de error claros y tempranos.
+
         Args:
             csv_path: Ruta al archivo CSV a validar.
-            
+
         Raises:
-            FileNotFoundError: Si el archivo no existe.
-            ValueError: Si la ruta no corresponde a un archivo.
-            PermissionError: Si no hay permisos de lectura.
+            FileNotFoundError: Si el archivo no existe en la ruta especificada.
+            ValueError: Si la ruta existe pero no corresponde a un archivo.
+            PermissionError: Si el usuario no tiene permisos de lectura.
+
+        Example:
+            >>> loader._validate_file_access("/path/to/data.csv")  # OK
+            >>> loader._validate_file_access("/nonexistent.csv")  # Raises FileNotFoundError
         """
         path = Path(csv_path)
         
@@ -263,14 +321,20 @@ class CSVLoader:
     def _generate_temp_table_name(self, csv_path: str) -> str:
         """Genera nombre único para tabla temporal basado en el archivo CSV.
 
-        DECISIÓN: Usar timestamp con microsegundos y random para evitar colisiones
+        Usa timestamp con microsegundos y sufijo aleatorio para evitar colisiones
         en migraciones concurrentes sin hardcodear nombres.
 
         Args:
-            csv_path: Ruta al archivo CSV.
+            csv_path: Ruta al archivo CSV. El nombre del archivo (sin extensión)
+                se usa como base para el nombre de la tabla.
 
         Returns:
-            Nombre de tabla temporal único.
+            Nombre de tabla temporal único en formato:
+            'temp_{csv_name}_{timestamp}_{random_suffix}'.
+
+        Example:
+            >>> name = loader._generate_temp_table_name("data/customers.csv")
+            >>> assert name.startswith("temp_customers_")
         """
         import time
         import random
@@ -287,17 +351,27 @@ class CSVLoader:
         schema: Dict[str, Any],
         db_connector: DBConnector
     ) -> None:
-        """
-        Crea tabla temporal con estructura del esquema.
+        """Crea tabla temporal con estructura del esquema.
+
+        Soporta dos formatos de schema:
+        - Directo: {'col1': 'INTEGER', 'col2': 'TEXT'}
+        - YAML: {'columns': {'col1': {'type': 'integer'}, 'col2': {'type': 'string'}}}
+
+        Mapea tipos YAML a tipos SQL automáticamente y agrega id SERIAL
+        PRIMARY KEY si no está definido en el esquema.
 
         Args:
             temp_table: Nombre de la tabla temporal a crear.
             schema: Diccionario con definición de columnas y tipos SQL.
-                     Puede tener estructura YAML (con 'columns') o directa.
+                Puede tener estructura YAML (con 'columns') o directa.
             db_connector: Conector a base de datos para ejecutar CREATE.
 
         Raises:
             Exception: Si falla la creación de la tabla temporal.
+
+        Example:
+            >>> schema = {'name': 'TEXT', 'age': 'INTEGER'}
+            >>> loader._create_temp_table('temp_users', schema, db)
         """
 
         # ■■■■■■■■■■■■■ Manejar estructura de schema YAML o directa ■■■■■■■■■■■■■
@@ -439,17 +513,29 @@ class CSVLoader:
         validators: Dict[str, Callable],
         row_num: int
     ) -> List[str]:
-        """
-        Valida una fila usando validadores inyectados.
+        """Valida una fila usando validadores inyectados.
+
+        Aplica validación Strategy Pattern: si existe un validador para un campo,
+        lo usa; otherwise, aplica validación básica de tipo según el esquema.
+
+        Los validadores deben retornar una tupla (is_valid, error_msg, suggestion).
 
         Args:
-            row: Diccionario con valores de la fila CSV.
-            schema: Definición de campos esperados.
-            validators: Funciones validadoras por campo.
+            row: Diccionario con valores de la fila CSV como strings.
+            schema: Definición de campos esperados con tipos y restricciones.
+            validators: Diccionario de funciones validadoras por campo.
             row_num: Número de fila para reporte de errores.
 
         Returns:
-            Lista de mensajes de error encontrados en la fila.
+            Lista de mensajes de error encontrados en la fila. Cada mensaje
+            incluye el número de fila, nombre del campo y descripción del error.
+
+        Example:
+            >>> row = {'name': 'John', 'email': 'invalid'}
+            >>> schema = {'name': {'type': 'string'}, 'email': {'type': 'email'}}
+            >>> validators = {'email': lambda v: (bool('@' in v), 'Email inválido', 'user@domain.com')}
+            >>> errors = loader._validate_row(row, schema, validators, 1)
+            >>> assert 'Fila 1, campo' in errors[0]
         """
         row_errors = []
 
@@ -488,20 +574,27 @@ class CSVLoader:
         delimiter: str,
         db_connector: DBConnector
     ) -> int:
-        """
-        Usa COPY FROM con buffer en memoria para máxima performance.
-        
+        """Usa COPY FROM con buffer en memoria para máxima performance.
+
+        Construye un CSV en memoria usando StringIO y usa copy_expert de
+        psycopg2 para ingestión optimizada, evitando escritura en disco.
+
         Args:
             rows: Lista de diccionarios con datos a insertar.
             temp_table: Tabla temporal destino.
             delimiter: Delimitador CSV para el buffer.
             db_connector: Conector a base de datos.
-            
+
         Returns:
             Número de filas copiadas exitosamente.
-            
+
         Raises:
             Exception: Si falla la operación COPY.
+
+        Example:
+            >>> rows = [{'name': 'John', 'age': '30'}, {'name': 'Jane', 'age': '25'}]
+            >>> count = loader._copy_rows_to_temp_table(rows, 'temp_users', ',', db)
+            >>> assert count == 2
         """
 
         # ■■■■■■■■■■■■■ StringIO buffer para evitar escritura en disco ■■■■■■■■■■■■■
@@ -543,12 +636,15 @@ class CSVLoader:
         schema: Dict[str, Any],
         db_connector: DBConnector
     ) -> List[str]:
-        """
-        Valida datos en tabla temporal contra constraints de BD.
-        
-        DECISIÓN: Usar target_table como referencia por defecto para FKs implícitas.
-        Esto permite validaciones flexibles sin hardcodear nombres de tablas.
-        
+        """Valida datos en tabla temporal contra constraints de BD.
+
+        Realiza validaciones que no se pueden hacer en validación por fila:
+        - Unicidad de campos marcados como unique
+        - Integridad referencial de foreign keys
+
+        Usa target_table como referencia por defecto para FKs implícitas,
+        permitiendo validaciones flexibles sin hardcodear nombres de tablas.
+
         Args:
             temp_table: Tabla temporal con datos a validar.
             target_table: Tabla destino final (usada como referencia por defecto).
@@ -556,10 +652,11 @@ class CSVLoader:
                 - unique: Si el campo debe ser único
                 - foreign_key: Diccionario con {table, column} o usa target_table por defecto
             db_connector: Conector a base de datos.
-            
+
         Returns:
-            Lista de mensajes de error encontrados.
-            
+            Lista de mensajes de error encontrados. Cada error describe
+            el constraint violado y los valores involucrados.
+
         Example:
             >>> schema = {
             ...     "customer_id": {"foreign_key": {"table": "customers", "column": "id"}},
@@ -569,6 +666,8 @@ class CSVLoader:
             >>> errors = loader._validate_temp_table_data(
             ...     "temp_orders", "orders", schema, db
             ... )
+            >>> if errors:
+            ...     print(f"Errores de validación: {errors}")
         """
         errors = []
         
@@ -641,18 +740,20 @@ class CSVLoader:
         validation_errors: List[str],
         db_connector: DBConnector
     ) -> int:
-        """
-        Transfiere solo filas válidas excluyendo las con errores.
-        
+        """Transfiere solo filas válidas excluyendo las con errores.
+
+        Extrae los IDs de filas inválidas desde los mensajes de error y construye
+        una consulta INSERT con WHERE NOT IN para transferir solo las filas válidas.
+
         Args:
             temp_table: Tabla temporal con datos filtrados.
             target_table: Tabla destino final.
             validation_errors: Lista de errores para identificar filas inválidas.
             db_connector: Conector a base de datos.
-            
+
         Returns:
             Número de filas transferidas exitosamente.
-            
+
         Raises:
             Exception: Si falla la transferencia.
         """
@@ -704,19 +805,18 @@ class CSVLoader:
         temp_table: str,
         cursor
     ) -> List[int]:
-        """
-        Extrae IDs de filas inválidas desde mensajes de error.
-        
-        DECISIÓN: Parsear errores de validación para identificar filas específicas
-        que deben ser excluidas de la transferencia.
-        
+        """Extrae IDs de filas inválidas desde mensajes de error.
+
+        Parsea errores de validación para identificar filas específicas que deben
+        ser excluidas de la transferencia. Soporta errores de FK y duplicados.
+
         Args:
             validation_errors: Lista de mensajes de error de validación.
             temp_table: Tabla temporal para consultar IDs si es necesario.
             cursor: Cursor de base de datos para consultas adicionales.
-            
+
         Returns:
-            Lista de IDs de filas inválidas a excluir.
+            Lista de IDs de filas inválidas a excluir (sin duplicados).
         """
         invalid_ids = []
         
@@ -765,16 +865,19 @@ class CSVLoader:
         target_table: str,
         db_connector: DBConnector
     ) -> int:
-        """
-        Transfiere todas las filas de temporal a destino.
-        
+        """Transfiere todas las filas de temporal a destino.
+
+        Se usa cuando no hay errores de validación, permitiendo una transferencia
+        completa con un solo INSERT SELECT para máxima eficiencia.
+
         Args:
             temp_table: Tabla temporal con todos los datos.
             target_table: Tabla destino final.
             db_connector: Conector a base de datos.
-            
+
         Returns:
             Número de filas transferidas exitosamente.
+
         Raises:
             Exception: Si falla la transferencia completa.
         """

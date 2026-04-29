@@ -1,11 +1,32 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO:      Validador de Formato Teléfono - Dominio Específico E-commerce.
-AUTOR:       Fisherk2
-FECHA:       2026-04-23
-DESCRIPCIÓN: Módulo de validación pura de formato telefónico según E.164 flexible.
+"""Validador de Formato Teléfono - Dominio Específico E-commerce.
+
+Módulo de validación pura de formato telefónico según E.164 flexible.
 Independiente de infraestructura, optimizado para validación fila-a-fila.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+Características principales:
+- Validación E.164 flexible con regex compilada
+- Limpieza automática de caracteres no numéricos
+- Detección y sugerencia de códigos de país
+- Soporte para formatos comunes (US, MX, etc.)
+- Validaciones de longitud y estructura
+- Función pura sin dependencias externas
+
+Example:
+    >>> from src.validators.custom.phone_validator import validate_phone_format
+    >>>
+    >>> # Teléfono válido en formato E.164
+    >>> is_valid, error, suggestion = validate_phone_format("+525551234567")
+    >>> print(is_valid)  # True
+    >>>
+    >>> # Teléfono con formato local MX
+    >>> is_valid, error, suggestion = validate_phone_format("5551234567")
+    >>> print(is_valid)  # False
+    >>> print(suggestion)  # "+525551234567"
+    >>>
+    >>> # Teléfono con caracteres especiales
+    >>> is_valid, error, suggestion = validate_phone_format("(555) 123-4567")
+    >>> print(is_valid)  # False
+    >>> print(suggestion)  # "+15551234567"
 """
 
 from __future__ import annotations
@@ -45,13 +66,24 @@ _COUNTRY_CODES = {
 # para consistencia en la base de datos
 
 def _clean_phone_number(phone: str) -> str:
-    """
-    Limpia número telefónico eliminando caracteres no numéricos.
-    
+    """Limpia número telefónico eliminando caracteres no numéricos.
+
+    Elimina espacios, guiones, paréntesis y otros caracteres no numéricos,
+    manteniendo solo dígitos y el símbolo + si está al inicio.
+
     Args:
         phone: Número telefónico original.
+
     Returns:
         Número limpio con solo dígitos y posible + inicial.
+
+    Example:
+        >>> _clean_phone_number("(555) 123-4567")
+        '5551234567'
+        >>> _clean_phone_number("+1 (555) 123-4567")
+        '+15551234567'
+        >>> _clean_phone_number("0055-1234-5678")
+        '5512345678'
     """
 
     # ■■■■■■■■■■■■■ Eliminar espacios, guiones, paréntesis y otros caracteres ■■■■■■■■■■■■■
@@ -65,13 +97,24 @@ def _clean_phone_number(phone: str) -> str:
 
 
 def _generate_phone_suggestion(phone: str) -> Optional[str]:
-    """
-    Genera sugerencia de formato E.164 basada en el número limpio.
-    
+    """Genera sugerencia de formato E.164 basada en el número limpio.
+
+    Analiza el número para inferir el código de país apropiado y generar
+    una sugerencia en formato E.164 estándar.
+
     Args:
         phone: Número telefónico limpio.
+
     Returns:
         Sugerencia en formato E.164 o None si no es posible.
+
+    Example:
+        >>> _generate_phone_suggestion("5551234567")  # MX local
+        '+525551234567'
+        >>> _generate_phone_suggestion("15551234567")  # US local
+        '+15551234567'
+        >>> _generate_phone_suggestion("+525551234567")  # Ya es válido
+        None
     """
 
     # ■■■■■■■■■■■■■ Si ya tiene + y es válido, no sugerir cambios ■■■■■■■■■■■■■
@@ -97,24 +140,33 @@ def _generate_phone_suggestion(phone: str) -> Optional[str]:
     return None
 
 def validate_phone_format(value: Optional[str]) -> Tuple[bool, str, Optional[str]]:
-    """
-    Valida formato de teléfono E.164 flexible con sugerencias.
-    
+    """Valida formato de teléfono E.164 flexible con sugerencias.
+
     Función pura que valida formato y proporciona feedback accionable.
-    
+    Realiza limpieza automática de caracteres no numéricos y genera
+    sugerencias de formato E.164 basadas en el patrón del número.
+
     Args:
         value: Teléfono a validar o None.
+
     Returns:
         Tupla (es_válido, mensaje_error, sugerencia_o_None):
         - es_válido: True si el formato es correcto
         - mensaje_error: Mensaje descriptivo en español
         - sugerencia_o_None: Sugerencia específica o None
-    Examples:
+
+    Example:
         >>> result = validate_phone_format("555-123-4567")
-        >>> print(result)  # (False, "Formato de teléfono inválido", "+15551234567")
+        >>> print(result)  # (False, "Formato de teléfono inválido. ¿Quisiste decir '+15551234567'?", "+15551234567")
         
         >>> result = validate_phone_format("+525551234567")
         >>> print(result)  # (True, "", None)
+        
+        >>> result = validate_phone_format("(555) 123-4567")
+        >>> print(result)  # (False, "Formato de teléfono inválido. ¿Quisiste decir '+15551234567'?", "+15551234567")
+        
+        >>> result = validate_phone_format(None)
+        >>> print(result)  # (True, "Teléfono es opcional", None)
     """
 
     # ■■■■■■■■■■■■■ Manejo defensivo de valores nulos/vacíos ■■■■■■■■■■■■■

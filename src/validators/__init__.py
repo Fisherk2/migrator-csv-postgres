@@ -1,10 +1,4 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO:      Facade de Validadores - Boundary Layer para el Migrador CSV.
-AUTOR:       Fisherk2
-FECHA:       2026-04-22
-DESCRIPCIÓN: Expone una API limpia y estable de validaciones del auditor externo.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+"""Facade de Validadores - Boundary Layer para el Migrador CSV.
 
 Este módulo actúa como un patrón Facade que expone una API limpia y estable
 de validaciones del auditor externo, protegiendo al dominio de cambios en la
@@ -13,6 +7,30 @@ estructura interna de dependencias externas según Clean Architecture.
 El dominio (src.migrator) depende de esta abstracción, no del detalle de
 implementación del auditor externo, aplicando el Principio de Inversión
 de Dependencias (DIP).
+
+Validadores disponibles:
+- validate_integer: Validación de enteros usando TypeValidator del auditor
+- validate_float: Validación de flotantes usando TypeValidator del auditor
+- validate_string: Validación de strings usando TypeValidator del auditor
+- validate_boolean: Validación de booleanos usando TypeValidator del auditor
+- validate_email_format: Validador custom de formato de email
+- validate_phone_format: Validador custom de formato de teléfono
+
+Example:
+    >>> from src.validators import validate_email_format, validate_integer
+    >>>
+    >>> # Validar email
+    >>> is_valid, error = validate_email_format("user@example.com")
+    >>> print(is_valid)  # True
+    >>>
+    >>> # Validar entero
+    >>> is_valid, error = validate_integer("123")
+    >>> print(is_valid)  # True
+    >>>
+    >>> # Validar con valor inválido
+    >>> is_valid, error = validate_integer("abc")
+    >>> print(is_valid)  # False
+    >>> print(error)     # "abc no es un entero válido"
 """
 
 from __future__ import annotations
@@ -36,7 +54,23 @@ try:
     
     # ▲▲▲▲▲▲ Wrappers para exponer funciones en lugar de métodos ▲▲▲▲▲▲
     def validate_integer(value: Any) -> tuple[bool, str]:
-        """Wrapper para validación de enteros usando TypeValidator del auditor."""
+        """Wrapper para validación de enteros usando TypeValidator del auditor.
+
+        Args:
+            value: Valor a validar como entero.
+
+        Returns:
+            Tupla (is_valid, error_message) donde is_valid es True si el valor
+            es un entero válido, y error_message contiene el mensaje de error.
+
+        Example:
+            >>> validate_integer("123")
+            (True, '')
+            >>> validate_integer("abc")
+            (False, "'abc' no es un entero válido")
+            >>> validate_integer("")
+            (False, 'El valor es requerido')
+        """
         if value is None or value == "":
             return False, "El valor es requerido"
         is_valid = _type_validator.validate_type(value, "entero")
@@ -45,7 +79,23 @@ try:
         return False, f"'{value}' no es un entero válido"
     
     def validate_float(value: Any) -> tuple[bool, str]:
-        """Wrapper para validación de flotantes usando TypeValidator del auditor."""
+        """Wrapper para validación de flotantes usando TypeValidator del auditor.
+
+        Args:
+            value: Valor a validar como flotante.
+
+        Returns:
+            Tupla (is_valid, error_message) donde is_valid es True si el valor
+            es un flotante válido, y error_message contiene el mensaje de error.
+
+        Example:
+            >>> validate_float("123.45")
+            (True, '')
+            >>> validate_float("abc")
+            (False, "'abc' no es un flotante válido")
+            >>> validate_float("")
+            (False, 'El valor es requerido')
+        """
         if value is None or value == "":
             return False, "El valor es requerido"
         is_valid = _type_validator.validate_type(value, "flotante")
@@ -54,7 +104,25 @@ try:
         return False, f"'{value}' no es un flotante válido"
     
     def validate_string(value: Any) -> tuple[bool, str]:
-        """Wrapper para validación de strings usando TypeValidator del auditor."""
+        """Wrapper para validación de strings usando TypeValidator del auditor.
+
+        Args:
+            value: Valor a validar como string.
+
+        Returns:
+            Tupla (is_valid, error_message) donde is_valid es True si el valor
+            es un string válido no vacío, y error_message contiene el mensaje de error.
+
+        Example:
+            >>> validate_string("Hola mundo")
+            (True, '')
+            >>> validate_string("")
+            (False, 'El string no puede estar vacío')
+            >>> validate_string(None)
+            (False, 'El valor es requerido')
+            >>> validate_string(123)
+            (False, 'Se esperaba string, se recibió int')
+        """
         if value is None:
             return False, "El valor es requerido"
         if not isinstance(value, str):
@@ -65,7 +133,25 @@ try:
         return True, ""
     
     def validate_boolean(value: Any) -> tuple[bool, str]:
-        """Wrapper para validación de booleanos usando TypeValidator del auditor."""
+        """Wrapper para validación de booleanos usando TypeValidator del auditor.
+
+        Args:
+            value: Valor a validar como booleano.
+
+        Returns:
+            Tupla (is_valid, error_message) donde is_valid es True si el valor
+            es un booleano válido, y error_message contiene el mensaje de error.
+
+        Example:
+            >>> validate_boolean("true")
+            (True, '')
+            >>> validate_boolean("false")
+            (True, '')
+            >>> validate_boolean("abc")
+            (False, "'abc' no es un booleano válido")
+            >>> validate_boolean("")
+            (False, 'El valor es requerido')
+        """
         if value is None or value == "":
             return False, "El valor es requerido"
         is_valid = _type_validator.validate_type(value, "booleano")

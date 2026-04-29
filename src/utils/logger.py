@@ -1,11 +1,25 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO:      Configuración centralizada de logging.
-AUTOR:       Fisherk2
-FECHA:       2026-04-22
-DESCRIPCIÓN: Este módulo provee una fábrica thread-safe de loggers configurados
+"""Configuración centralizada de logging para la aplicación.
+
+Este módulo provee una fábrica thread-safe de loggers configurados
 para toda la aplicación, siguiendo principios de Clean Architecture.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+Características principales:
+- Fábrica thread-safe con cache para evitar configuraciones duplicadas
+- Formato estructurado y consistente para todos los logs
+- Configuración automática de handlers y formatters
+- Prevención de propagación a librerías externas
+- Función de reset para testing
+
+Example:
+    >>> from src.utils.logger import get_logger
+    >>>
+    >>> logger = get_logger(__name__)
+    >>> logger.info("Iniciando migración")
+    >>> logger.error("Error en conexión")
+    >>>
+    >>> # Para testing
+    >>> from src.utils.logger import reset_logging
+    >>> reset_logging()  # Limpia configuración
 """
 
 from __future__ import annotations
@@ -33,14 +47,23 @@ _VALID_LEVELS = {
 }
 
 def _normalize_level(level: str) -> int:
-    """
-    Normaliza y valida el nivel de logging.
+    """Normaliza y valida el nivel de logging.
+
+    Convierte el nivel a mayúsculas, elimina espacios y valida contra
+    los niveles permitidos. Si el nivel no es válido, usa INFO como fallback
+    y registra una advertencia.
+
     Args:
-        level: Nivel de log como string.
+        level: Nivel de log como string (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+
     Returns:
-        Nivel de logging normalizado (int).
-    Raises:
-        ValueError: Si el nivel no es válido.
+        Nivel de logging normalizado (int) correspondiente a logging.DEBUG, etc.
+
+    Example:
+        >>> _normalize_level("debug")
+        10
+        >>> _normalize_level("invalid")  # Usa INFO como fallback
+        20
     """
     level_upper = level.upper().strip()
     
@@ -55,12 +78,21 @@ def _normalize_level(level: str) -> int:
 
 
 def _create_handler(level: int) -> logging.StreamHandler:
-    """
-    Crea y configura el handler para stderr.
+    """Crea y configura el handler para stderr.
+
+    Usa stderr para evitar interferencia con stdout del CLI. Configura
+    el handler con el nivel especificado y un formatter estructurado.
+
     Args:
-        level: Nivel de logging para el handler.
+        level: Nivel de logging para el handler (logging.DEBUG, etc.).
+
     Returns:
-        Handler configurado con formato estructurado.
+        Handler configurado con formato estructurado y listo para usar.
+
+    Example:
+        >>> handler = _create_handler(logging.INFO)
+        >>> assert isinstance(handler, logging.StreamHandler)
+        >>> assert handler.level == logging.INFO
     """
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(level)
@@ -72,20 +104,30 @@ def _create_handler(level: int) -> logging.StreamHandler:
 
 
 def get_logger(module_name: str, level: str = "INFO") -> logging.Logger:
-    """
-    Fábrica thread-safe de loggers configurados.
-    
+    """Fábrica thread-safe de loggers configurados.
+
     Crea o retorna un logger con configuración consistente para toda
     la aplicación. Usa stderr para evitar interferencia con stdout del CLI.
+    Implementa cache para evitar configuraciones duplicadas y es thread-safe.
+
     Args:
         module_name: Nombre del módulo (usualmente __name__).
         level: Nivel de logging (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+
     Returns:
         Logger configurado y listo para uso.
-        
+
+    Raises:
+        ValueError: Si module_name no es un string no vacío.
+
     Example:
         >>> logger = get_logger(__name__)
         >>> logger.info("Iniciando migración")
+        >>> logger.error("Error en conexión")
+        >>>
+        >>> # Con nivel personalizado
+        >>> debug_logger = get_logger(__name__, "DEBUG")
+        >>> debug_logger.debug("Información detallada")
     """
 
     # ■■■■■■■■■■■■■ Validación de entrada ■■■■■■■■■■■■■
@@ -122,8 +164,14 @@ def get_logger(module_name: str, level: str = "INFO") -> logging.Logger:
 
 def reset_logging() -> None:
     """Reseta la configuración de logging (útil para testing).
-    
+
     Elimina todos los handlers del logger raíz y limpia el cache.
+    Es útil para tests que necesitan un entorno de logging limpio.
+
+    Example:
+        >>> logger = get_logger(__name__)
+        >>> reset_logging()  # Limpia configuración
+        >>> assert len(_cache) == 0
     """
     with _logger_lock:
         root_logger = logging.getLogger()

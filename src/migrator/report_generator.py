@@ -1,10 +1,22 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO: Generador de reportes
-AUTOR: Fisherk2
-FECHA: 2026-04-23
-DESCRIPCIÓN: Generación de reportes de migración con múltiples formatos.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+"""Generador de reportes de migración con múltiples formatos de salida.
+
+Este módulo proporciona componentes para generar reportes de migración
+en diferentes formatos:
+
+- ReportGenerator: Clase principal para generar resúmenes y exportar reportes
+- _MigrationErrorEncoder: Encoder JSON personalizado para serializar MigrationError
+
+El diseño separa la lógica del pipeline de la presentación, permitiendo
+que esta clase solo se encargue de formatear y exportar datos sin conocer
+detalles del proceso de migración.
+
+Example:
+    >>> from src.migrator.report_generator import ReportGenerator
+    >>>
+    >>> generator = ReportGenerator()
+    >>> summary = generator.generate_summary(100, 5, [], config)
+    >>> generator.export_to_json(summary, "report.json")
+    >>> generator.print_human_readable(summary)
 """
 
 from __future__ import annotations
@@ -21,19 +33,28 @@ from src.utils.logger import get_logger
 
 
 class ReportGenerator:
-    """
-    Generador de reportes de migración con múltiples formatos de salida.
-    
-    DECISIÓN: Separar lógica de pipeline de presentación. Esta clase
-    solo formatea y exporta datos, sin conocer detalles del proceso.
-    
+    """Generador de reportes de migración con múltiples formatos de salida.
+
+    Separa la lógica del pipeline de la presentación, permitiendo que esta
+    clase solo se encargue de formatear y exportar datos sin conocer detalles
+    del proceso de migración.
+
     Attributes:
-        logger: Logger configurado para este módulo.
+        _logger: Logger configurado para este módulo.
+
+    Example:
+        >>> generator = ReportGenerator()
+        >>> summary = generator.generate_summary(100, 5, [], config)
+        >>> generator.export_to_json(summary, "report.json")
+        >>> generator.print_human_readable(summary)
     """
     
     def __init__(self) -> None:
-        """
-        Inicializa el generador con logger centralizado.
+        """Inicializa el generador con logger centralizado.
+
+        Example:
+            >>> generator = ReportGenerator()
+            >>> assert generator is not None
         """
 
         self._logger = get_logger(__name__)
@@ -45,21 +66,28 @@ class ReportGenerator:
         errors: List[MigrationError],
         config: Dict
     ) -> Dict:
-        """
-        Genera resumen estructurado del proceso de migración.
-        
+        """Genera resumen estructurado del proceso de migración.
+
         Args:
             imported: Número de registros importados exitosamente.
             rejected: Número de registros rechazados.
             errors: Lista de errores detallados.
             config: Configuración completa del proceso.
-            
+
         Returns:
-            Diccionario con resumen para serialización.
-            
+            Diccionario con resumen para serialización, incluyendo:
+                - timestamp: Momento de generación del reporte
+                - total_processed: Suma de importados y rechazados
+                - imported: Número de registros importados
+                - rejected: Número de registros rechazados
+                - success_rate: Porcentaje de éxito (0-100)
+                - error_count: Número de errores
+                - config: Metadatos de configuración
+                - errors: Lista de errores detallados
+
         Example:
             >>> generator = ReportGenerator()
-            >>> summary = generator.generate_summary(100, 5, errors, config)
+            >>> summary = generator.generate_summary(100, 5, [], {"source": {}, "target": {}})
             >>> print(summary["total_processed"])
             105
         """
@@ -92,19 +120,27 @@ class ReportGenerator:
         }
     
     def export_to_json(self, report_data: Dict, output_path: str) -> bool:
-        """
-        Exporta reporte a formato JSON con serialización segura.
-        
-        DECISIÓN: Usar encoder personalizado para manejar datetime y dataclasses.
-        
+        """Exporta reporte a formato JSON con serialización segura.
+
+        Usa encoder personalizado para manejar datetime y dataclasses.
+        Crea directorios padre si no existen y realiza escritura atómica.
+
         Args:
             report_data: Diccionario con datos del reporte.
             output_path: Ruta del archivo JSON a generar.
+
         Returns:
             True si la exportación fue exitosa, False en caso contrario.
+
         Raises:
             PermissionError: Si no hay permisos de escritura.
             OSError: Si hay errores del sistema de archivos.
+
+        Example:
+            >>> generator = ReportGenerator()
+            >>> summary = generator.generate_summary(100, 5, [], config)
+            >>> success = generator.export_to_json(summary, "reports/migration.json")
+            >>> assert success == True
         """
         try:
 
@@ -135,14 +171,18 @@ class ReportGenerator:
             return False
     
     def print_human_readable(self, report_data: Dict) -> None:
-        """
-        Imprime reporte formateado para CLI con colores opcionales.
-        
-        DECISIÓN: Separar logging del output. Registrar resumen vía logger
-        y mostrar detalles en stdout solo si es terminal interactivo.
-        
+        """Imprime reporte formateado para CLI con colores opcionales.
+
+        Separa el logging del output: registra el resumen vía logger y
+        muestra detalles en stdout solo si es una terminal interactiva.
+
         Args:
             report_data: Diccionario con datos del reporte.
+
+        Example:
+            >>> generator = ReportGenerator()
+            >>> summary = generator.generate_summary(100, 5, [], config)
+            >>> generator.print_human_readable(summary)  # Imprime en stdout
         """
 
         # ■■■■■■■■■■■■■ Registrar resumen en logs ■■■■■■■■■■■■■
@@ -160,8 +200,13 @@ class ReportGenerator:
             self._print_errors(report_data["errors"])
     
     def _print_summary(self, report_data: Dict) -> None:
-        """
-        Imprime resumen con formato estructurado y colores.
+        """Imprime resumen con formato estructurado y colores.
+
+        Detecta automáticamente si se deben usar colores ANSI basándose en
+        si stdout es una terminal interactiva.
+
+        Args:
+            report_data: Diccionario con datos del reporte.
         """
         use_colors = self._should_use_colors()
         
@@ -187,8 +232,13 @@ class ReportGenerator:
             print(f"  Tasa éxito: {success_rate}%")
     
     def _print_errors(self, errors: List[Dict]) -> None:
-        """
-        Imprime lista de errores con formato estructurado.
+        """Imprime lista de errores con formato estructurado.
+
+        Limita la salida a los primeros 10 errores para evitar saturar
+        la terminal cuando hay muchos errores.
+
+        Args:
+            errors: Lista de diccionarios con detalles de errores.
         """
 
         use_colors = self._should_use_colors()
@@ -221,8 +271,13 @@ class ReportGenerator:
                 print(f"  ... y {remaining} errores más (mostrados primeros 10)")
     
     def _should_use_colors(self) -> bool:
-        """
-        Detecta si se deben usar colores ANSI en la salida.
+        """Detecta si se deben usar colores ANSI en la salida.
+
+        Verifica si stdout es una terminal interactiva y no se ha
+        desactivado explícitamente con la variable de entorno NO_COLOR.
+
+        Returns:
+            True si se deben usar colores, False en caso contrario.
         """
 
         # ■■■■■■■■■■■■■ Verificar si stdout es una terminal interactiva ■■■■■■■■■■■■■
@@ -235,15 +290,27 @@ class ReportGenerator:
         )
     
     def _color_number(self, number: int) -> str:
-        """
-        Aplica color verde a números para destacar métricas.
+        """Aplica color verde a números para destacar métricas.
+
+        Args:
+            number: Número a colorear.
+
+        Returns:
+            String con código ANSI verde si se usan colores,否则 el número como string.
         """
 
         return f"\033[92m{number}\033[0m" if self._should_use_colors() else str(number)
     
     def _color_percentage(self, percentage: float) -> str:
-        """
-        Aplica color según tasa de éxito.
+        """Aplica color según tasa de éxito.
+
+        Usa verde para tasas >= 95%, amarillo para >= 80%, y rojo para menores.
+
+        Args:
+            percentage: Porcentaje a colorear (0-100).
+
+        Returns:
+            String con código ANSI de color según el valor, o el porcentaje como string.
         """
 
         if not self._should_use_colors():

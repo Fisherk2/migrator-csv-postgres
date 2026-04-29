@@ -1,10 +1,29 @@
-"""
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-MÓDULO: Pipeline de migración
-AUTOR: Fisherk2
-FECHA: 2026-04-23
-DESCRIPCIÓN: Orquestador de migración con patrón Template Method.
-■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+"""Orquestador de migración con patrón Template Method.
+
+Este módulo implementa el patrón Template Method para definir el esqueleto
+algorítmico de la migración de datos CSV a PostgreSQL, delegando la
+implementación concreta de cada paso a componentes inyectados.
+
+El pipeline garantiza:
+- Transacciones atómicas con rollback automático
+- Validación de datos configurable
+- Reporting estructurado de resultados
+- Extensibilidad mediante hooks de ciclo de vida
+
+Example:
+    >>> from src.migrator.db_connector import DBConnector
+    >>> from src.migrator.csv_loader import CSVLoader
+    >>> from src.migrator.error_handler import ErrorHandler
+    >>> from src.migrator.report_generator import ReportGenerator
+    >>>
+    >>> db = DBConnector(host="localhost", user="postgres", password="secret", database="mydb")
+    >>> loader = CSVLoader()
+    >>> handler = ErrorHandler()
+    >>> reporter = ReportGenerator()
+    >>>
+    >>> pipeline = MigrationPipeline(db, loader, handler, reporter)
+    >>> results = pipeline.execute("config/migration.yaml")
+    >>> print(f"Importados: {results['imported']}, Rechazados: {results['rejected']}")
 """
 
 from __future__ import annotations
@@ -20,20 +39,34 @@ from src.utils.logger import get_logger
 
 
 class MigrationPipeline:
-    """
-    Orquestador de migración con patrón Template Method.
-    
-    DECISIÓN: Define esqueleto algorítmico inmutable para garantizar
-    consistencia operativa. Los pasos concretos se delegan a componentes
-    inyectados, permitiendo testing aislado y extensibilidad.
-    
+    """Orquestador de migración con patrón Template Method.
+
+    Define el esqueleto algorítmico inmutable para garantizar consistencia
+    operativa. Los pasos concretos se delegan a componentes inyectados,
+    permitiendo testing aislado y extensibilidad mediante hooks.
+
+    El flujo del pipeline es:
+    1. Cargar configuración YAML
+    2. Establecer conexión a base de datos
+    3. Iniciar transacción
+    4. Cargar y validar CSV
+    5. Finalizar transacción (commit/rollback)
+    6. Generar reporte
+    7. Limpiar recursos
+
     Attributes:
-        db_connector: Conector a base de datos inyectado.
-        csv_loader: Cargador CSV inyectado.
-        error_handler: Gestor de errores inyectado.
-        report_generator: Generador de reportes inyectado.
-        config: Configuración de migración cargada.
-        logger: Logger configurado para este módulo.
+        _db_connector: Conector a base de datos inyectado.
+        _csv_loader: Cargador CSV inyectado.
+        _error_handler: Gestor de errores inyectado.
+        _report_generator: Generador de reportes inyectado.
+        _config: Configuración de migración cargada desde YAML.
+        _logger: Logger configurado para este módulo.
+
+    Example:
+        >>> pipeline = MigrationPipeline(db, loader, handler, reporter)
+        >>> results = pipeline.execute("config/default_migration.yaml")
+        >>> assert results['imported'] >= 0
+        >>> assert results['rejected'] >= 0
     """
     
     def __init__(
@@ -43,14 +76,20 @@ class MigrationPipeline:
         error_handler: ErrorHandler,
         report_generator: ReportGenerator
     ) -> None:
-        """
-        Inicializa el pipeline con componentes inyectados.
-        
+        """Inicializa el pipeline con componentes inyectados.
+
         Args:
-            db_connector: Conector a base de datos.
-            csv_loader: Cargador de archivos CSV.
+            db_connector: Conector a base de datos PostgreSQL.
+            csv_loader: Cargador de archivos CSV con validación.
             error_handler: Gestor de errores de migración.
-            report_generator: Generador de reportes.
+            report_generator: Generador de reportes en JSON/CLI.
+
+        Example:
+            >>> db = DBConnector(host="localhost", user="postgres", password="secret", database="mydb")
+            >>> loader = CSVLoader()
+            >>> handler = ErrorHandler()
+            >>> reporter = ReportGenerator()
+            >>> pipeline = MigrationPipeline(db, loader, handler, reporter)
         """
         self._db_connector = db_connector
         self._csv_loader = csv_loader
@@ -60,23 +99,32 @@ class MigrationPipeline:
         self._logger = get_logger(__name__)
     
     def execute(self, config_path: str) -> Dict:
-        """
-        Ejecuta el pipeline completo de migración.
-        
-        DECISIÓN: Template Method con esqueleto fijo try/except/finally
+        """Ejecuta el pipeline completo de migración.
+
+        Implementa el Template Method con esqueleto fijo try/except/finally
         para garantizar rollback y cleanup incluso en fallos inesperados.
-        
+
         Args:
-            config_path: Ruta al archivo de configuración YAML.
+            config_path: Ruta al archivo de configuración YAML. El archivo
+                debe contener secciones para 'source', 'target', 'validation',
+                y 'reporting'.
+
         Returns:
-            Diccionario con métricas finales del proceso.
+            Diccionario con métricas finales del proceso:
+                - 'imported': Número de filas importadas exitosamente.
+                - 'rejected': Número de filas rechazadas por validación.
+                - 'errors': Lista de errores encontrados.
+
         Raises:
+            FileNotFoundError: Si el archivo de configuración no existe.
+            yaml.YAMLError: Si el archivo YAML tiene sintaxis inválida.
             Exception: Si falla el pipeline de forma crítica.
-            
+
         Example:
             >>> pipeline = MigrationPipeline(db, loader, handler, reporter)
-            >>> results = pipeline.execute("config/migration.yaml")
+            >>> results = pipeline.execute("config/default_migration.yaml")
             >>> print(f"Importados: {results['imported']}")
+            >>> print(f"Rechazados: {results['rejected']}")
         """
         try:
             # ■■■■■■■■■■■■■ Paso 1: Cargar configuración ■■■■■■■■■■■■■
@@ -129,14 +177,22 @@ class MigrationPipeline:
             self._cleanup_resources()
     
     def _load_config(self, config_path: str) -> Dict:
-        """
-        Carga configuración desde archivo YAML.
-        
+        """Carga configuración desde archivo YAML.
+
         Args:
-            config_path: Ruta al archivo de configuración.
-            
+            config_path: Ruta al archivo de configuración YAML.
+
         Returns:
-            Diccionario con configuración de migración.
+            Diccionario con configuración de migración. Estructura esperada:
+                {
+                    'source': {'file': 'path/to/data.csv'},
+                    'target': {'table': 'table_name'},
+                    'validation': {'max_errors': 100},
+                    'reporting': {'output_path': 'path/to/report.json'}
+                }
+
+        Raises:
+            FileNotFoundError: Si el archivo de configuración no existe.
         """
 
         # ■■■■■■■■■■■■■ DECISIÓN: Delegar carga de config a utilidad externa ■■■■■■■■■■■■■
@@ -154,11 +210,13 @@ class MigrationPipeline:
         return config
     
     def _establish_connection(self) -> None:
-        """
-        Establece conexión a base de datos.
-        
-        DECISIÓN: DBConnector ya fue configurado por la capa de presentación (CLI)
+        """Establece conexión a base de datos.
+
+        DBConnector ya fue configurado por la capa de presentación (CLI)
         con las credenciales apropiadas. Esta función solo delega la conexión.
+
+        Raises:
+            psycopg2.OperationalError: Si falla la conexión a PostgreSQL.
         """
 
         # ■■■■■■■■■■■■■ La configuración se inyectó desde el CLI al instanciar DBConnector ■■■■■■■■■■■■■
@@ -166,11 +224,16 @@ class MigrationPipeline:
     
     
     def _load_and_validate_csv(self) -> Dict:
-        """
-        Carga y valida CSV con inyección de componentes.
-        
+        """Carga y valida CSV con inyección de componentes.
+
+        Este método coordina dos operaciones principales:
+        1. Carga del CSV a una tabla temporal con validación
+        2. Transferencia de datos válidos a la tabla destino
+
         Returns:
-            Diccionario con estadísticas del proceso.
+            Diccionario con estadísticas del proceso:
+                - 'imported': Número de filas importadas exitosamente.
+                - 'rejected': Número de filas rechazadas por validación.
         """
         source_config = self._config.get("source", {})
         target_config = self._config.get("target", {})
@@ -206,11 +269,12 @@ class MigrationPipeline:
         return stats
     
     def _finalize_transaction(self) -> None:
-        """
-        Finaliza transacción según estado del error handler.
-        
-        DECISIÓN: Commit solo si no se superó umbral crítico de errores.
+        """Finaliza transacción según estado del error handler.
+
+        Commit solo si no se superó el umbral crítico de errores.
         Rollback automático en caso contrario.
+
+        El umbral se lee de la configuración en 'validation.max_errors'.
         """
         max_errors = self._config.get("validation", {}).get("max_errors", 100)
         
@@ -222,13 +286,19 @@ class MigrationPipeline:
             self._db_connector.commit()
     
     def _generate_report(self, stats: Dict) -> Dict:
-        """
-        Genera reporte con métricas y errores.
-        
+        """Genera reporte con métricas y errores.
+
+        El reporte se genera en dos formatos según configuración:
+        - JSON: Exportado a archivo si 'reporting.output_path' está configurado
+        - CLI: Mostrado en consola si 'reporting.cli_output' es True
+
         Args:
-            stats: Estadísticas del proceso de migración.
+            stats: Estadísticas del proceso de migración con claves
+                'imported' y 'rejected'.
+
         Returns:
-            Diccionario con datos del reporte.
+            Diccionario con datos del reporte incluyendo métricas,
+            errores y metadatos de configuración.
         """
         report_data = self._report_generator.generate_summary(
             imported=stats.get("imported", 0),
@@ -249,11 +319,11 @@ class MigrationPipeline:
         return report_data
     
     def _cleanup_resources(self) -> None:
-        """
-        Limpia recursos y cierra conexiones.
-        
-        DECISIÓN: Ejecutarse siempre en finally para garantizar
-        liberación de recursos incluso en fallos.
+        """Limpia recursos y cierra conexiones.
+
+        Se ejecuta siempre en el bloque finally para garantizar
+        liberación de recursos incluso en fallos. Cierra la conexión
+        a la base de datos si está activa.
         """
         try:
             if self._db_connector.is_connected:
@@ -266,44 +336,55 @@ class MigrationPipeline:
     
     def _pre_connection_hook(self) -> None:
         """Hook ejecutado antes de establecer conexión.
-        
-        Sobrescribir en subclases para comportamiento personalizado.
+
+        Sobrescribir en subclases para comportamiento personalizado,
+        como validación de configuración o preparación de recursos.
+
+        Example:
+            >>> class CustomPipeline(MigrationPipeline):
+            ...     def _pre_connection_hook(self) -> None:
+            ...         self._logger.info("Validando configuración pre-conexión...")
         """
         pass
     
     def _pre_transaction_hook(self) -> None:
         """Hook ejecutado antes de iniciar transacción.
-        
-        Sobrescribir en subclases para comportamiento personalizado.
+
+        Sobrescribir en subclases para comportamiento personalizado,
+        como verificación de estado de la base de datos.
         """
         pass
     
     def _pre_load_hook(self, csv_path: str) -> None:
         """Hook ejecutado antes de cargar CSV.
-        
+
+        Sobrescribir en subclases para comportamiento personalizado,
+        como validación del archivo CSV o preparación de esquemas.
+
         Args:
             csv_path: Ruta del archivo CSV a cargar.
-            
-        Sobrescribir en subclases para comportamiento personalizado.
         """
         pass
     
     def _post_load_hook(self, stats: Dict) -> None:
         """Hook ejecutado después de cargar CSV.
-        
+
+        Sobrescribir en subclases para comportamiento personalizado,
+        como notificaciones o procesamiento adicional de estadísticas.
+
         Args:
-            stats: Estadísticas del proceso de carga.
-            
-        Sobrescribir en subclases para comportamiento personalizado.
+            stats: Estadísticas del proceso de carga con claves
+                'imported' y 'rejected'.
         """
         pass
     
     def _post_report_hook(self, report_data: Dict) -> None:
         """Hook ejecutado después de generar reporte.
-        
+
+        Sobrescribir en subclases para comportamiento personalizado,
+        como envío de notificaciones o almacenamiento adicional.
+
         Args:
-            report_data: Datos del reporte generado.
-            
-        Sobrescribir en subclases para comportamiento personalizado.
+            report_data: Datos del reporte generado con métricas y errores.
         """
         pass
