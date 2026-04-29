@@ -45,6 +45,11 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - **Configuration Guide**: Documentación de YAML y variables de entorno
 - **Error Handling**: Documentación de excepciones y estrategias de recuperación
 
+## [1.0.1] - 2026-04-28
+
+### Corregido
+- **Información de Contacto**: Actualizado correo electrónico de contacto en CONTRIBUTING.MD a dev@fisherk2.com
+
 ## [Sin Lanzar]
 
 ### Agregado
