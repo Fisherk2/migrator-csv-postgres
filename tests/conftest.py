@@ -364,7 +364,7 @@ def db_with_real_schema(db_connection: DBConnector, real_schema_sql: str) -> Gen
         pytest.skip(f"No se pudo inicializar esquema real: {e}")
         yield None
     finally:
-        # Rollback en teardown del fixture db_connection limpiará todo
+        # Rollback en teardown del fixture db_connection limpiará completamente
         pass
 
 

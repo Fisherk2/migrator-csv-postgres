@@ -226,7 +226,7 @@ class MigrationPipeline:
     def _load_and_validate_csv(self) -> Dict:
         """Carga y valida CSV con inyección de componentes.
 
-        Este método coordina dos operaciones principales:
+        Esta función coordina dos operaciones principales:
         1. Carga del CSV a una tabla temporal con validación
         2. Transferencia de datos válidos a la tabla destino
 

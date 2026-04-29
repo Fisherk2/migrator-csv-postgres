@@ -176,7 +176,7 @@ class DBConnector:
     def close(self) -> None:
         """Cierra la conexión y limpia recursos.
 
-        Es seguro llamar este método incluso si la conexión ya está cerrada.
+        Es seguro llamar esta función incluso si la conexión ya está cerrada.
         """
 
         if self._connection and not self._connection.closed:
